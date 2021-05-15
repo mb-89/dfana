@@ -1,4 +1,5 @@
 import dfana
+import logfuns
 from qt_material import apply_stylesheet
 import argparse
 from functools import partial
@@ -6,8 +7,8 @@ from functools import partial
 app = dfana.pg.mkQApp("dfana")
 win = dfana.QtGui.QMainWindow()
 
-win.setStatusBar(dfana.LogBar(win))
-win.addDockWidget(dfana.QtCore.Qt.BottomDockWidgetArea, dfana.LogWidget(win))
+win.setStatusBar(logfuns.LogBar(win))
+win.addDockWidget(dfana.QtCore.Qt.BottomDockWidgetArea, logfuns.LogWidget(win))
 
 apply_stylesheet(app, theme='dark_amber.xml')
 area = dfana.DockArea()

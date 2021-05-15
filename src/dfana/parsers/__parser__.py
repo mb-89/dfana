@@ -24,6 +24,14 @@ class Parser(QtCore.QRunnable):
     def consumePaths(self):
          return [self.path]
 
-    def run(self):
+    def parse_raw(self):
         time.sleep(1)
-        self.signaller.done.emit({"path":self.path, "result": self.path})
+        return []
+
+    def postprocess(self, dfs):
+        return dfs
+
+    def run(self):
+        dfs_raw = self.parse_raw()
+        dfs = self.postprocess(dfs_raw)
+        self.signaller.done.emit({"path":self.path, "result": dfs})

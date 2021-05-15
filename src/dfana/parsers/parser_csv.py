@@ -5,4 +5,4 @@ import __parser__
 
 class Parser(__parser__.Parser):
     def accept(self):
-        return self.path.endswith(".csv"), [self.path]
+        return self.path.endswith(".csv")
