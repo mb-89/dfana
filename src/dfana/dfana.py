@@ -5,15 +5,13 @@ import pyqtgraph.dockarea as da
 import logging
 import sys
 from functools import partial
-from glob import glob,iglob
 import os.path as op
+import parsers
 
 log = logging.getLogger()
 
 DEFAULT_H = 500
 DEFAULT_W = 1000
-
-app = QtWidgets.QApplication.instance()
 
 class StreamToLogger():
     """
@@ -29,7 +27,6 @@ class StreamToLogger():
         for line in buf.rstrip().splitlines():
             self.logger.log(self.log_level, line.rstrip())
     def flush(self):pass
-
 class LogBar(QtWidgets.QStatusBar):
     log2bar = QtCore.Signal(str)
     def __init__(self, parent):
@@ -64,7 +61,6 @@ class LogBar(QtWidgets.QStatusBar):
         #add to statusbar
         fn = lambda x: self.showMessage(x, 0)
         connectLog2fn(log, fn, self.log2bar)
-
 def connectLog2fn(log, fn ,s):
     #emit function to connect log msgs to qt signals:
     def emit(obj, sig, logRecord):
@@ -77,7 +73,6 @@ def connectLog2fn(log, fn ,s):
     hdl.emit = partial(emit,hdl,s)
     s.connect(fn)
     log.addHandler(hdl)
-
 class LogWidget(QtWidgets.QDockWidget):
     log2wid = QtCore.Signal(str)
     def __init__(self, window):
@@ -98,7 +93,7 @@ class LogWidget(QtWidgets.QDockWidget):
 
         log = logging.getLogger()
         connectLog2fn(log, self.append, self.log2wid)
-        self.action = QtGui.QAction(app)
+        self.action = QtGui.QAction()
         self.action.setText("toggle log")
         self.action.setShortcut("CTRL+L")
         self.action.triggered.connect(self.togglehide)
@@ -111,6 +106,8 @@ class DockArea(da.DockArea):
     def __init__(self):
         super().__init__()
         self.nrOfPlots = 0
+        pg.mkQApp().data = {}
+
     def addWidgets(self):
         d1 = DataFrameDock()
         d2 = DataSeriesDock()
@@ -143,7 +140,6 @@ class DockArea(da.DockArea):
                 noTargetFound=True
                 break
         if noTargetFound: self.addDock(plt, "bottom", size=(DEFAULT_W,DEFAULT_H/5*4))
-
 class DataFrameTree(QtWidgets.QTreeView):
     fileDropped = QtCore.Signal(str)
     def __init__(self):
@@ -170,6 +166,7 @@ class DataFrameDock(da.Dock):
         super().__init__("DataFrames", size=(DEFAULT_W/3,DEFAULT_H/5))
         self.setStretch(x=DEFAULT_W/3,y=DEFAULT_H/5)
         self.parsequeue=[]
+        self.resultsPending = 0
         self.parsing = False
         row = QtWidgets.QWidget()
         l = QtWidgets.QHBoxLayout()
@@ -198,13 +195,14 @@ class DataFrameDock(da.Dock):
         self.addWidget(self.list,row=1,col=0)
         self.addWidget(self.filt,row=2,col=0)
 
-        self.openaction = QtGui.QAction(app)
+        self.openaction = QtGui.QAction(pg.mkQApp())
         self.openaction.setText("parse file(s)")
         self.openaction.setShortcut("CTRL+O")
         self.openaction.triggered.connect(self.browse.click)
         self.addAction(self.openaction)
 
         self.list.fileDropped.connect(self.append2parseQueue)
+        pg.mkQApp().data["dfs"] = {}
 
     def getpath(self):
         files = QtWidgets.QFileDialog.getOpenFileName()
@@ -232,23 +230,22 @@ class DataFrameDock(da.Dock):
 
     def _parse(self, path):
         log.info(f"parsing {path}...")
-        nrOfHits = 0
-        consumedPaths = []
-        parseLater = []
-        #first do the files
-        for x in iglob(path, recursive="**" in path):
-            if any(x.startswith(cp) for cp in consumedPaths):continue
-            if op.isdir(x):
-                parseLater.append(x)
-                continue
-            log.info(x)
-            nrOfHits+=1
-        #now do the folders
-        for x in parseLater:
-            if any(x.startswith(cp) for cp in consumedPaths):continue
-            log.info(x)
-            nrOfHits+=1
-        log.info(f"parsing {path} done, found {nrOfHits} usable elements")
+        for qr in parsers.prepare(path):
+            qr.signaller.done.connect(self._acceptResult)
+            self.resultsPending+=1
+            log.info(f"started collecting dataframes from {qr.path}...")
+            QtCore.QThreadPool.globalInstance().start(qr)
+        if not self.resultsPending:
+            log.warning("path not accepted by any installed parser.")
+        
+    def _acceptResult(self, result):
+        path = result["path"]
+        result = result["result"]
+        log.info(f"done collecting dataframes from {path}, found {len(result)} dfs")
+        self.resultsPending-=1
+        if self.resultsPending==0:
+            log.info("all parser threads done.")
+
 class DataSeriesDock(da.Dock):
     def __init__(self):
         super().__init__("DataSeries", size=(DEFAULT_W/3,DEFAULT_H/5))
