@@ -2,6 +2,7 @@ import PySide6
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 import pyqtgraph.dockarea as da
+from qt_material import apply_stylesheet
 
 import os.path as op
 import logging
@@ -11,11 +12,20 @@ from defines import *
 
 log = logging.getLogger()
 
+def changeStyle():
+    app = pg.mkQApp()
+    extra = {}
+    apply_stylesheet(app, theme='dark_amber.xml', extra=extra)
+    p = app.palette()
+    p.setColor(QtGui.QPalette.Text, QtCore.Qt.red)
+    app.setPalette(p)
+
 class DockArea(da.DockArea):
     def __init__(self):
         super().__init__()
         self.nrOfPlots = 0
         pg.mkQApp().data = {}
+        
 
     def addWidgets(self):
         d1 = dffuns.DataFrameDock()
@@ -25,7 +35,10 @@ class DockArea(da.DockArea):
         self.addDock(d1)
         self.addDock(d2, "right", d1)
         self.addDock(d3, "right", d2)
+        
+        d1.list.updated.connect(d2.list.updateMdl)
         d3.pltsig.connect(self.addPlot)
+
 
     def addPlot(self):
         plt = da.Dock(f"Plot #{self.nrOfPlots}", closable=True)

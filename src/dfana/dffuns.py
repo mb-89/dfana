@@ -5,13 +5,19 @@ import pyqtgraph as pg
 import logging
 import parsers
 from functools import partial
+import sharedWidgets
 log = logging.getLogger()
 
 class DataFrameTree(QtWidgets.QTreeView):
     fileDropped = QtCore.Signal(str)
+    updated = QtCore.Signal()
     def __init__(self):
         super().__init__()
         self.setDragDropMode(QtWidgets.QAbstractItemView.DropOnly)
+        self.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.mdl = QtGui.QStandardItemModel()
+        self.setModel(self.mdl)
+
     def dragEnterEvent(self, e):
         if e.mimeData().hasUrls():  e.accept()
         else:                       e.ignore()
@@ -28,8 +34,23 @@ class DataFrameTree(QtWidgets.QTreeView):
                 self.fileDropped.emit(str(url.toLocalFile()))
         else:
             e.ignore()
+
+    def updateMdl(self):
+        self.mdl.clear()
+        self.mdl.setColumnCount(2)
+        self.setHeaderHidden(True)
+        for dfidx,df in pg.mkQApp().data["dfs"].items():
+            self.mdl.appendRow([
+                QtGui.QStandardItem(dfidx),
+                QtGui.QStandardItem(df.attrs["name"])
+                ])
+        self.updated.emit()
+
 class DataFrameDock(da.Dock):
     def __init__(self):
+        app = pg.mkQApp()
+        app.data["dfs"] = {}
+
         super().__init__("DataFrames", size=(DEFAULT_W/3,DEFAULT_H/5))
         self.setStretch(x=DEFAULT_W/3,y=DEFAULT_H/5)
         self.parsequeue=[]
@@ -56,20 +77,18 @@ class DataFrameDock(da.Dock):
         row.setLayout(l)
 
         self.list = DataFrameTree()
-        self.filt = QtWidgets.QLineEdit()
-        self.filt.setPlaceholderText("<df filter expr>")
+        self.sel = sharedWidgets.MdlRowSelector(self.list)
+
         self.addWidget(row,row=0,col=0)
         self.addWidget(self.list,row=1,col=0)
-        self.addWidget(self.filt,row=2,col=0)
+        self.addWidget(self.sel,row=2,col=0)
 
-        self.openaction = QtGui.QAction(pg.mkQApp())
+        self.openaction = QtGui.QAction(app)
         self.openaction.setText("parse file(s)")
         self.openaction.setShortcut("CTRL+O")
         self.openaction.triggered.connect(self.browse.click)
         self.addAction(self.openaction)
-
         self.list.fileDropped.connect(self.append2parseQueue)
-        pg.mkQApp().data["dfs"] = {}
 
     def getpath(self):
         files = QtWidgets.QFileDialog.getOpenFileName()
@@ -112,6 +131,9 @@ class DataFrameDock(da.Dock):
         path = result["path"]
         result = result["result"]
         log.info(f"done collecting dataframes from {path}, found {len(result)} dfs")
+        for df in result:
+            pg.mkQApp().data["dfs"][df.attrs["_idx"]]=df
         self.resultsPending-=1
+        self.list.updateMdl()
         if self.resultsPending==0:
             log.info("all parser threads done.")

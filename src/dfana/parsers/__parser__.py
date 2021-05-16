@@ -6,6 +6,8 @@ from pandas import DataFrame
 class Signaller(QtCore.QObject):
     done = QtCore.Signal(dict)
 
+dfcnt = 0
+
 class Parser(QtCore.QRunnable):
     def __init__(self,path,tempdir=None):
         super().__init__()
@@ -29,6 +31,10 @@ class Parser(QtCore.QRunnable):
         return []
 
     def postprocess(self, dfs):
+        global dfcnt
+        for df in dfs:
+            df.attrs["_idx"] = f"DF{str(dfcnt).zfill(3)}"
+            dfcnt+=1
         return dfs
 
     def run(self):

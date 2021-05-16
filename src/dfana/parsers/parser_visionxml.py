@@ -9,6 +9,7 @@ import pandas as pd
 
 class Parser(__parser__.Parser):
     def accept(self):
+        self.datadir = None
         if not self.path.endswith(".xml"):return False
         rootxml = etree.parse(self.path).getroot()
         datadir = op.splitext(self.path)[0]
@@ -19,7 +20,7 @@ class Parser(__parser__.Parser):
         return True
 
     def consumePaths(self):
-        return [self.path, self.datadir]
+        return [self.path, self.datadir] if self.datadir else [self.path]
 
     def parse_raw(self):
         dfs = self.analyzevisionxml(self.rootxml)
@@ -43,7 +44,9 @@ class Parser(__parser__.Parser):
                 if nameelem is not None:
                     path.append(op.dirname(target.find("RecordRef").text))
                 target=target.getparent()
-            path = op.join(op.dirname(rootxml.base), *reversed(path)).replace("%20", " ")
+            basepath = rootxml.base
+            if not op.isfile(basepath):basepath=basepath[6:]#convert uri to path
+            path = op.join(op.dirname(basepath), *reversed(path)).replace("%20", " ")
             if op.isfile(path) and op.getsize(path):
                 massData.append((path,columnInfo))
 
