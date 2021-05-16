@@ -7,10 +7,12 @@ import sharedWidgets
 log = logging.getLogger()
 
 class DataSeriesTree(QtWidgets.QTreeView):
+    updated = QtCore.Signal()
     def __init__(self):
         super().__init__()
         self.mdl = QtGui.QStandardItemModel()
         self.setModel(self.mdl)
+        self.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
         pg.mkQApp().data["dss"] = {}
     def updateMdl(self):
         app = pg.mkQApp()
@@ -35,14 +37,14 @@ class DataSeriesTree(QtWidgets.QTreeView):
                 QtGui.QStandardItem(key),
                 QtGui.QStandardItem(col)
                 ])
-
+        self.updated.emit()
 
 class DataSeriesDock(da.Dock):
     def __init__(self):
         super().__init__("DataSeries", size=(DEFAULT_W/3,DEFAULT_H/5))
         self.setStretch(x=DEFAULT_W/3,y=DEFAULT_H/5)
         self.list = DataSeriesTree()
-        self.sel = sharedWidgets.MdlRowSelector(self.list)
+        self.sel = sharedWidgets.MdlRowMultiSelector(self.list)
 
         self.addWidget(self.list,row=0,col=0)
         self.addWidget(self.sel,row=1,col=0)

@@ -54,6 +54,9 @@ class MdlRowSelector(QtWidgets.QWidget):
             if sel:self.sel.setText(regexp)
             else:self.sel.setText("")
 
+class MdlRowMultiSelector(MdlRowSelector):pass
+
+
 # https://learndataanalysis.org/display-pandas-dataframe-with-pyqt5-qtableview-widget/
 class DFview(QtWidgets.QTableView):
     def __init__(self, df):
