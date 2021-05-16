@@ -23,7 +23,7 @@ class DataSeriesTree(QtWidgets.QTreeView):
         colset = set(cols)
         colset.discard(None)
         dss = app.data["dss"]
-        for col in colset:
+        for col in sorted(colset):
             for k,v in dss.items():
                 if v==col:
                     key=k
@@ -31,8 +31,6 @@ class DataSeriesTree(QtWidgets.QTreeView):
             else:
                 key = f"DS{str(len(dss)).zfill(3)}"
                 dss[key] = col
-        for key in sorted(dss.keys()):
-            col = dss[key]
             self.mdl.appendRow([
                 QtGui.QStandardItem(key),
                 QtGui.QStandardItem(col)

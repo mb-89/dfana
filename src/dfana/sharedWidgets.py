@@ -53,3 +53,38 @@ class MdlRowSelector(QtWidgets.QWidget):
             regexp = "(" + "|".join(sorted(x.data(0) for x in sel))+")"
             if sel:self.sel.setText(regexp)
             else:self.sel.setText("")
+
+# https://learndataanalysis.org/display-pandas-dataframe-with-pyqt5-qtableview-widget/
+class DFview(QtWidgets.QTableView):
+    def __init__(self, df):
+        super().__init__()
+        mdl=pandasModel(df)
+        self.setModel(mdl)
+        self.resize(1000, 600)
+        self.resizeColumnsToContents()
+        self.horizontalHeader().setStretchLastSection(1)
+
+class pandasModel(QtCore.QAbstractTableModel):
+
+    def __init__(self, data):
+        QtCore.QAbstractTableModel.__init__(self)
+        self._data = data
+
+    def rowCount(self, parent=None):
+        return self._data.shape[0]
+
+    def columnCount(self, parnet=None):
+        return self._data.shape[1]
+
+    def data(self, index, role=QtCore.Qt.DisplayRole):
+        if index.isValid():
+            if role == QtCore.Qt.DisplayRole:
+                return str(self._data.iloc[index.row(), index.column()])
+        return None
+
+    def headerData(self, col, orientation, role):
+        if orientation == QtCore.Qt.Horizontal and role == QtCore.Qt.DisplayRole:
+            return self._data.columns[col]
+        if orientation == QtCore.Qt.Vertical and role == QtCore.Qt.DisplayRole:
+            return self._data.index[col]
+        return None

@@ -8,6 +8,7 @@ import os.path as op
 import logging
 import dffuns
 import dsfuns
+import sharedWidgets
 from defines import *
 
 log = logging.getLogger()
@@ -30,7 +31,7 @@ class DockArea(da.DockArea):
     def addWidgets(self):
         d1 = dffuns.DataFrameDock()
         d2 = dsfuns.DataSeriesDock()
-        d3 = PlotDock()
+        d3 = ActionsDock()
 
         self.addDock(d1)
         self.addDock(d2, "right", d1)
@@ -38,7 +39,6 @@ class DockArea(da.DockArea):
         
         d1.list.updated.connect(d2.list.updateMdl)
         d3.pltsig.connect(self.addPlot)
-
 
     def addPlot(self):
         plt = da.Dock(f"Plot #{self.nrOfPlots}", closable=True)
@@ -63,10 +63,10 @@ class DockArea(da.DockArea):
                 break
         if noTargetFound: self.addDock(plt, "bottom", size=(DEFAULT_W,DEFAULT_H/5*4))
 
-class PlotDock(da.Dock):
+class ActionsDock(da.Dock):
     pltsig = QtCore.Signal()
     def __init__(self):
-        super().__init__("Plot options", size=(DEFAULT_W/3,DEFAULT_H/5))
+        super().__init__("Actions", size=(DEFAULT_W/3,DEFAULT_H/5))
         self.setStretch(x=DEFAULT_W/3,y=DEFAULT_H/5)
         w = QtWidgets.QWidget()
         l = QtWidgets.QVBoxLayout()
@@ -81,4 +81,16 @@ class PlotDock(da.Dock):
         self.meta = QtWidgets.QPushButton("metadata")
         l.addWidget(self.meta)
         l.addWidget(self.plt)
+        self.meta.clicked.connect(self.showMetaData)
         self.plt.clicked.connect(self.pltsig.emit)
+        self.metaView = None
+    def showMetaData(self):
+        if self.metaView:
+            self.metaView.close()
+        app = pg.mkQApp()
+        dfs = app.data["dfs"]
+        if not dfs:return
+        dfmeta = dffuns.getDFoverview(dfs)
+        self.metaView = sharedWidgets.DFview(dfmeta)
+        self.metaView.setWindowTitle("Dataframe metadata overview")
+        self.metaView.show()

@@ -6,6 +6,10 @@ import logging
 import parsers
 from functools import partial
 import sharedWidgets
+import os.path as op
+import itertools
+import pandas as pd
+
 log = logging.getLogger()
 
 class DataFrameTree(QtWidgets.QTreeView):
@@ -69,7 +73,7 @@ class DataFrameDock(da.Dock):
         self.browse.setMaximumWidth(100)
         self.browse.clicked.connect(self.getpath)
         self.path.lineEdit().returnPressed.connect(self.append2parseQueue)
-        self.moni = QtWidgets.QPushButton("moni")
+        #self.moni = QtWidgets.QPushButton("moni")
         #self.moni.setCheckable(True)
         l.addWidget(self.path)
         l.addWidget(self.browse)
@@ -137,3 +141,37 @@ class DataFrameDock(da.Dock):
         self.list.updateMdl()
         if self.resultsPending==0:
             log.info("all parser threads done.")
+
+def getDFoverview(dfs):
+    if isinstance(dfs, dict):dfs = dfs.values()
+    if len(dfs)<=1: return None
+    allMetaData = [x.attrs for x in dfs]
+    names = [x["name"] for x in allMetaData]
+    commonprefix = op.commonprefix(names)
+    names = [x.replace(commonprefix,"") for x in names]
+    allMetaData = [x.attrs for x in dfs]
+    allAttrs = sorted(list(set(itertools.chain(*(tuple(x.keys()) for x in allMetaData)))))
+
+    header = {"nameprefix": commonprefix} if commonprefix else {"nameprefix":"no name commonalities"}
+    for k in allAttrs:
+        attrcollection = [x.get(k) for x in allMetaData]
+        attrcollection = [x for x in attrcollection if x is not None]
+        if len(set(attrcollection))==1:
+            header[k] = attrcollection[0]
+
+    rows = []
+    for name, md in zip(names, allMetaData):
+        dfdict = {}
+        for k in [x for x in allAttrs if x not in header]:
+            if k == "name":continue
+            dfdict[k] = md.get(k)
+        
+        if commonprefix:    dfdict[f"name [{commonprefix}...]"] = "..."+name
+        else:               dfdict["name"] = name
+        rows.append(dfdict)
+
+    df = pd.DataFrame(rows)
+    df.set_index("_idx",inplace=True)
+    df.sort_index(inplace=True)
+    df.attrs = header
+    return df
