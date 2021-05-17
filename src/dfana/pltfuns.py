@@ -7,10 +7,12 @@ log = logging.getLogger()
 
 class PltDock(da.Dock):
     def __init__(self,nr,dfsel,dssel,rawdata):
-        super().__init__(f"Plot #{nr}", closable=True)
+        name = f"Plot #{nr}"
+        super().__init__(name, closable=True)
         self.dfsel = dfsel
         self.dssel = dssel
         self.rawdata = rawdata
+        self._name = name
 
         dfs = tuple(x for x in rawdata["dfs"].values() if not dfsel or x.attrs["_idx"] in dfsel)
 

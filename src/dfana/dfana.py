@@ -3,6 +3,7 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 import pyqtgraph.dockarea as da
 from qt_material import apply_stylesheet
+from functools import partial
 
 import os.path as op
 import logging
@@ -10,6 +11,7 @@ import dffuns
 import dsfuns
 import pltfuns
 import sharedWidgets
+import gc
 from defines import *
 
 log = logging.getLogger()
@@ -72,6 +74,15 @@ class DockArea(da.DockArea):
                     noTargetFound=True
                     break
             if noTargetFound: self.addDock(plt, "bottom", size=(DEFAULT_W,DEFAULT_H/5*4))
+
+            cl = partial(self.cleanup, plt._name)
+            plt.sigClosed.connect(cl)
+
+    def cleanup(self, dockname, extraArg):
+        dck = self.docks.pop(dockname)
+        dck.deleteLater()
+        del dck
+        gc.collect()
 
 class ActionsDock(da.Dock):
     pltsig = QtCore.Signal()
