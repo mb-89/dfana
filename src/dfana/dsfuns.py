@@ -13,7 +13,10 @@ class DataSeriesTree(QtWidgets.QTreeView):
         self.mdl = QtGui.QStandardItemModel()
         self.setModel(self.mdl)
         self.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.setItemDelegate(sharedWidgets.DelegateWithSelectorMarker())
+        self.setFocusPolicy(QtCore.Qt.StrongFocus)
         pg.mkQApp().data["dss"] = {}
+
     def updateMdl(self):
         app = pg.mkQApp()
         self.mdl.clear()
@@ -35,8 +38,11 @@ class DataSeriesTree(QtWidgets.QTreeView):
                 dss[key] = col
             self.mdl.appendRow([
                 QtGui.QStandardItem(key),
-                QtGui.QStandardItem(col)
+                QtGui.QStandardItem(col),
+                QtGui.QStandardItem("")
                 ])
+        self.resizeColumnToContents(1)
+        self.resizeColumnToContents(0)
         self.updated.emit()
 
 class DataSeriesDock(da.Dock):
@@ -44,7 +50,7 @@ class DataSeriesDock(da.Dock):
         super().__init__("DataSeries", size=(DEFAULT_W/3,DEFAULT_H/5))
         self.setStretch(x=DEFAULT_W/3,y=DEFAULT_H/5)
         self.list = DataSeriesTree()
-        self.sel = sharedWidgets.MdlRowMultiSelector(self.list)
+        self.sel = sharedWidgets.MdlRowMultiSelector(self.list,toggleSel=True)
 
         self.addWidget(self.list,row=0,col=0)
         self.addWidget(self.sel,row=1,col=0)

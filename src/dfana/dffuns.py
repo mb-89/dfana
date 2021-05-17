@@ -20,6 +20,7 @@ class DataFrameTree(QtWidgets.QTreeView):
         self.setDragDropMode(QtWidgets.QAbstractItemView.DropOnly)
         self.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
         self.mdl = QtGui.QStandardItemModel()
+        self.setItemDelegate(sharedWidgets.DelegateWithSelectorMarker())
         self.setModel(self.mdl)
 
     def dragEnterEvent(self, e):
@@ -83,9 +84,22 @@ class DataFrameDock(da.Dock):
         self.list = DataFrameTree()
         self.sel = sharedWidgets.MdlRowSelector(self.list)
 
+        #w = QtWidgets.QWidget()
+        #l2 = QtWidgets.QVBoxLayout()
+        #l2.setSpacing(0)
+        #l2.setContentsMargins(0,0,0,0)
+        #w.setLayout(l2)
+        #l2.addWidget(row)
+        #l2.addWidget(self.list)
+        #l2.addWidget(self.sel)
+        #self.addWidget(w)
+
         self.addWidget(row,row=0,col=0)
         self.addWidget(self.list,row=1,col=0)
         self.addWidget(self.sel,row=2,col=0)
+        self.topLayout.setRowStretch(0,1)
+        self.topLayout.setRowStretch(1,100)
+        self.topLayout.setRowStretch(2,1)
 
         self.openaction = QtGui.QAction(app)
         self.openaction.setText("parse file(s)")
