@@ -131,6 +131,14 @@ class MdlRowSelector(QtWidgets.QWidget):
         idxs = [x for x,_,_ in self.elems() if x.data(DATA_ISSELECTED) and targetGrp in x.data(DATA_ISSELECTED)]
         return idxs
 
+    def getSelectedIdxs(self):
+        dct = {}
+        idxs = [x for x,_,_ in self.elems() if x.data(DATA_ISSELECTED)]
+        for idx in idxs:
+            dct[idx.data(0)] = idx.data(DATA_ISSELECTED)
+        return dct
+
+
     def updateSelRes(self, targetGrp=None):
         if targetGrp is None:
             for idx in range(self.groupCnt):
