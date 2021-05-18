@@ -3,6 +3,10 @@ import pyqtgraph as pg
 import logging
 import helperfuns
 import math
+from functools import partial
+from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
+import numpy as np
+
 log = logging.getLogger()
 
 class PltDock(da.Dock):
@@ -73,15 +77,23 @@ class PltDock(da.Dock):
         return axes
 
     def buildplots(self, pltdata):
+        xlink = None
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
         for idx,(xd,yd) in enumerate(pltdata):
-            plt = self.buildplot(xd,yd)
-            self.addWidget(plt,row=idx,col=0)
+            if not yd:continue
+            plt = self.buildplot(xd,yd,xlink)
+            if xlink is None:xlink=plt.pw
+            splitter.addWidget(plt)
+        self.addWidget(splitter,row=idx,col=0)
 
-    def buildplot(self, xd,yd):
+    def buildplot(self, xd,yd,xlink):
         pw = XYplot()
         plt = pw.getPlotItem()
+        plt.setDownsampling(auto=True,mode="peak")
+        plt.setClipToView(True)
         xname = list(xd.keys())[0]
         plt.addLegend()
+        plt.showGrid(1,1,0.75)
         plt.setLabel("left", xname)
         xdata = xd[xname]
         l = len(yd)
@@ -91,10 +103,115 @@ class PltDock(da.Dock):
             except:
                 log.error(f"could not plot column {name}")
                 continue
+        if xlink is not None:
+            plt.setXLink(xlink)
         return pw
 
-class XYplot(pg.PlotWidget):
+class XYplot(QtWidgets.QWidget):
+
     def __init__(self):
         super().__init__()
+        self.pw = pg.PlotWidget()
+        self.pi = self.pw.getPlotItem()
+
+        self.c1 = RelPosCursor(1/3)
+        self.c2 = RelPosCursor(2/3)
+        self.pi.addItem(self.c1)
+        self.pi.addItem(self.c2)
+        self.meas = MeasWidget(self.pi,[self.c1,self.c2])
+
+        l = QtWidgets.QGridLayout()
+        self.setLayout(l)
+        l.setSpacing(0)
+        l.setContentsMargins(0,0,0,0)
+        l.addLayout(self.createButtons(),0,0)
+        l.addWidget(self.pw,0,1)
+        l.addWidget(self.meas,0,2)
+        l.setColumnStretch(0,1)
+        l.setColumnStretch(1,20)
+        l.setColumnStretch(2,0)
+        self.l = l
+
+    def createButtons(self):
+        buttons = QtWidgets.QVBoxLayout()
+        buttons.setSpacing(0)
+        buttons.setContentsMargins(0,0,0,0)
+
+        closebutton = QtWidgets.QPushButton("X")
+        buttons.addWidget(closebutton)
+        closebutton.clicked.connect(self.close)
+
+        cursbutton = QtWidgets.QPushButton("cursor")
+        buttons.addWidget(cursbutton)
+        cursbutton.clicked.connect(self.togglecursors)
+        return buttons
+
+    def togglecursors(self):
+        if self.meas.isHidden():    self.l.setColumnStretch(2,2)
+        else:                       self.l.setColumnStretch(2,0)
+        self.meas.toggle()
+        
+        self.c1.toggle()
+        self.c2.toggle()
+
+    def getPlotItem(self):
+        return self.pw.getPlotItem()
     def toggle(self):
         self.setHidden(not self.isHidden())
+
+class RelPosCursor(pg.InfiniteLine):
+    def __init__(self, startposrel):
+        super().__init__(angle=90,movable=True)
+        self.setVisible(False)
+        self.startposrel = startposrel
+        self.currposrel = startposrel
+    def toggle(self):
+        willbevisible = not self.isVisible()
+        if willbevisible:
+            self.setRelPos(self.startposrel)
+        self.setVisible(willbevisible)
+    def setPos(self,pos):
+        try:
+            x0,x1 = self.getViewBox().viewRange()[0]
+            dx = x1-x0
+            self.currposrel = (pos-x0)/dx
+        except AttributeError:
+            pass
+
+        super().setPos(pos)
+
+    def setRelPos(self, relpos=None):
+        if relpos is None: relpos = self.currposrel
+        x0,x1 = self.getViewBox().viewRange()[0]
+        dx = x1-x0
+        self.setValue(x0+relpos*dx)
+
+    def viewTransformChanged(self):
+        self.setRelPos()
+        return super().viewTransformChanged()
+
+class MeasWidget(QtWidgets.QLabel):
+    def __init__(self, plt, cursors):
+        super().__init__("")
+        self.plt = plt
+        self.cursors=dict((idx,c) for idx,c in enumerate(cursors))
+        self.setHidden(True)
+        self.proxies = [pg.SignalProxy(c.sigPositionChanged, rateLimit=30, slot=self.updateVals) for c in cursors]
+        self.values = [tuple() for x in self.cursors]
+        for k,v in self.cursors.items():
+            v.idx = k
+
+    def toggle(self):
+        self.setHidden(not self.isHidden())
+    def updateVals(self,c):
+        if self.isHidden():return
+        c = c[-1]
+        xval = c.pos()[0]
+        yvals = tuple(curve.yData[np.searchsorted(curve.xData, xval, side="left")] for curve in self.plt.curves)
+        self.values[c.idx] = (xval,*yvals)
+        self.updateText()
+    def updateText(self):
+        lines = []
+        for idx,v in enumerate(self.values):
+            lines.append(f"{idx}: {v}")
+        self.setText("\n".join(lines))
