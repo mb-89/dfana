@@ -47,10 +47,10 @@ class PltDock(da.Dock):
                     except: continue #if we dont find the x-data, we skip this dataframe
                 #collect y data
                 ydata = {}
-                for trc in traces:
+                for idx,trc in enumerate(traces):
                     try:
                         yd = df[trc].values
-                        name = f"{trc} [{df.attrs['_idx']}]"
+                        name = f"[Y{idx}] {trc} [{df.attrs['_idx']}]"
                         ydata[name]=yd
                     except:continue
             subplts.append((xdata,ydata))
@@ -147,7 +147,7 @@ class XYplot(QtWidgets.QWidget):
         return buttons
 
     def togglecursors(self):
-        if self.meas.isHidden():    self.l.setColumnStretch(2,2)
+        if self.meas.isHidden():    self.l.setColumnStretch(2,5)
         else:                       self.l.setColumnStretch(2,0)
         self.meas.toggle()
         
@@ -190,28 +190,56 @@ class RelPosCursor(pg.InfiniteLine):
         self.setRelPos()
         return super().viewTransformChanged()
 
-class MeasWidget(QtWidgets.QLabel):
+class MeasWidget(QtWidgets.QTableWidget):
     def __init__(self, plt, cursors):
-        super().__init__("")
+        super().__init__()
         self.plt = plt
+        f = self.font()
+        f.setPointSize(10)
+        self.setFont(f)
         self.cursors=dict((idx,c) for idx,c in enumerate(cursors))
         self.setHidden(True)
         self.proxies = [pg.SignalProxy(c.sigPositionChanged, rateLimit=30, slot=self.updateVals) for c in cursors]
-        self.values = [tuple() for x in self.cursors]
+        self.values = dict((x,tuple()) for x,_ in enumerate(self.cursors))
         for k,v in self.cursors.items():
             v.idx = k
 
     def toggle(self):
-        self.setHidden(not self.isHidden())
+        becomevisible = self.isHidden()
+        if becomevisible:
+            self.buildMeasTable()
+        self.setHidden(not becomevisible)
+
+    def buildMeasTable(self):
+        if self.plt.curves and self.rowCount(): return
+        rows = len(self.plt.curves)+1
+        cols = 4
+        self.setRowCount(rows)
+        self.setColumnCount(cols)
+        for row in range(rows):
+            for col in range(cols):
+                item = QtWidgets.QTableWidgetItem()
+                self.setItem(row,col,item)
+        for col in range(cols):
+            self.setColumnWidth(col,75)
+        self.setHorizontalHeaderLabels(["c1","c2","Δ","1/Δ"])
+        self.setVerticalHeaderLabels(["x"]+[f"y{idx}" for idx in range(rows-1)])
+
     def updateVals(self,c):
         if self.isHidden():return
         c = c[-1]
         xval = c.pos()[0]
         yvals = tuple(curve.yData[np.searchsorted(curve.xData, xval, side="left")] for curve in self.plt.curves)
         self.values[c.idx] = (xval,*yvals)
+        if self.values[0] and self.values[1]:
+            self.values["delta"] = np.array(self.values[1])-np.array(self.values[0])
+            if any(x==0.0 for x in self.values["delta"]): self.values["deltainv"] = tuple(0 for x in self.values["delta"])
+            else: self.values["deltainv"] = np.ones_like(self.values["delta"])/self.values["delta"]
+        else:
+            self.values["delta"] = (0,0)
+            self.values["deltainv"] = (0,0)
         self.updateText()
     def updateText(self):
-        lines = []
-        for idx,v in enumerate(self.values):
-            lines.append(f"{idx}: {v}")
-        self.setText("\n".join(lines))
+            for col,colvals in enumerate(self.values.values()):
+                for row,val in enumerate(colvals):
+                    self.item(row,col).setText(f"{val:.2e}")
