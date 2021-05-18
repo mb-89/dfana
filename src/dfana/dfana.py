@@ -3,12 +3,15 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 import pyqtgraph.dockarea as da
 from qt_material import apply_stylesheet
+from functools import partial
 
 import os.path as op
 import logging
 import dffuns
 import dsfuns
+import pltfuns
 import sharedWidgets
+import gc
 from defines import *
 
 log = logging.getLogger()
@@ -41,27 +44,45 @@ class DockArea(da.DockArea):
         d3.pltsig.connect(self.addPlot)
 
     def addPlot(self):
-        plt = da.Dock(f"Plot #{self.nrOfPlots}", closable=True)
-        plt.label.closeButton.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
-        plt.label.closeButton.setText("X")
-        plt.setStretch(x=DEFAULT_W,y=DEFAULT_H/5*4)
-        self.nrOfPlots+=1
-        existingPlots = sorted([k for k in self.docks.keys() if k.startswith("Plot #")])
-        noTargetFound = False
-        offset = 0
-        while True:
-            offset+=1
-            try:
-                target =self.docks[existingPlots[-offset]]
-                if target.area != self: continue #we dont dock onto floating plots
-                self.addDock(plt, "above",target , size=(DEFAULT_W,DEFAULT_H/5*4))
-                break
-            except TypeError:
-                continue
-            except (KeyError, IndexError) as e:
-                noTargetFound=True
-                break
-        if noTargetFound: self.addDock(plt, "bottom", size=(DEFAULT_W,DEFAULT_H/5*4))
+        app = pg.mkQApp()
+        dfs = self.docks["DataFrames"].sel.getSelectedIdxs()
+        if not dfs: dfs = dict((x, set([0])) for x in app.data["dfs"].keys())
+        dfs = tuple(dfs.keys())
+        dss = self.docks["DataSeries"].sel.getSelectedIdxs()
+
+        #for now, we plot one plot per df. may change later
+        for df in dfs:
+            singledf = tuple([df])
+            plt = pltfuns.PltDock(self.nrOfPlots,singledf,dss,app.data)
+            plt.label.closeButton.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+            plt.label.closeButton.setText("X")
+            plt.setStretch(x=DEFAULT_W,y=DEFAULT_H/5*4)
+            self.nrOfPlots+=1
+            existingPlots = sorted([k for k in self.docks.keys() if k.startswith("Plot #")])
+            noTargetFound = False
+            offset = 0
+            while True:
+                offset+=1
+                try:
+                    target =self.docks[existingPlots[-offset]]
+                    if target.area != self: continue #we dont dock onto floating plots
+                    self.addDock(plt, "above",target , size=(DEFAULT_W,DEFAULT_H/5*4))
+                    break
+                except TypeError:
+                    continue
+                except (KeyError, IndexError) as e:
+                    noTargetFound=True
+                    break
+            if noTargetFound: self.addDock(plt, "bottom", size=(DEFAULT_W,DEFAULT_H/5*4))
+
+            cl = partial(self.cleanup, plt._name)
+            plt.sigClosed.connect(cl)
+
+    def cleanup(self, dockname, extraArg):
+        dck = self.docks.pop(dockname)
+        dck.deleteLater()
+        del dck
+        gc.collect()
 
 class ActionsDock(da.Dock):
     pltsig = QtCore.Signal()
@@ -84,6 +105,7 @@ class ActionsDock(da.Dock):
         self.meta.clicked.connect(self.showMetaData)
         self.plt.clicked.connect(self.pltsig.emit)
         self.metaView = None
+
     def showMetaData(self):
         if self.metaView:
             self.metaView.close()

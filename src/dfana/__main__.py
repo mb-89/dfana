@@ -21,11 +21,13 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-read', nargs='+')
 args = vars(parser.parse_args())
 
-if args["read"]:
-    rd = args["read"]
-    for idx,p in enumerate(rd):
-        f = partial(win.centralWidget().docks["DataFrames"].append2parseQueue, p)
-        dfana.QtCore.QTimer.singleShot(idx, f)
+def parseargs():
+    if args["read"]:
+        rd = args["read"]
+        for idx,p in enumerate(rd):
+            f = partial(win.centralWidget().docks["DataFrames"].append2parseQueue, p)
+            dfana.QtCore.QTimer.singleShot(idx, f)
 
+dfana.QtCore.QTimer.singleShot(0, parseargs)
 dfana.pg.mkQApp().exec()
 
