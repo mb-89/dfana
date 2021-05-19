@@ -1,5 +1,4 @@
 from PySide6 import QtCore
-import time
 from pandas import DataFrame
 
 #https://stackoverflow.com/a/62027329
@@ -27,7 +26,6 @@ class Parser(QtCore.QRunnable):
          return [self.path]
 
     def parse_raw(self):
-        time.sleep(1)
         return []
 
     def postprocess(self, dfs):
