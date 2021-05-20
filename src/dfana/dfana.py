@@ -88,7 +88,7 @@ class ActionsDock(da.Dock):
     pltsig = QtCore.Signal()
     def __init__(self):
         super().__init__("Actions", size=(DEFAULT_W/3,DEFAULT_H/5))
-        self.setStretch(x=DEFAULT_W/3,y=DEFAULT_H/5)
+        self.setStretch(x=DEFAULT_W/5,y=DEFAULT_H/5)
         w = QtWidgets.QWidget()
         l = QtWidgets.QVBoxLayout()
         l.setContentsMargins(0,0,0,0)
@@ -99,7 +99,7 @@ class ActionsDock(da.Dock):
         self.addWidget(w)
 
         self.plt = QtWidgets.QPushButton("plot")
-        self.meta = QtWidgets.QPushButton("metadata")
+        self.meta = QtWidgets.QPushButton("meta")
         l.addWidget(self.meta)
         l.addWidget(self.plt)
         self.meta.clicked.connect(self.showMetaData)

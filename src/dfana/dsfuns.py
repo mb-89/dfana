@@ -48,7 +48,7 @@ class DataSeriesTree(QtWidgets.QTreeView):
 class DataSeriesDock(da.Dock):
     def __init__(self):
         super().__init__("DataSeries", size=(DEFAULT_W/3,DEFAULT_H/5))
-        self.setStretch(x=DEFAULT_W/3,y=DEFAULT_H/5)
+        self.setStretch(x=DEFAULT_W/5*2,y=DEFAULT_H/5)
         self.list = DataSeriesTree()
         self.sel = sharedWidgets.MdlRowMultiSelector(self.list,toggleSel=True)
 

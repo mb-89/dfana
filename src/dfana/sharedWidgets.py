@@ -1,7 +1,9 @@
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
+import pyqtgraph as pg
 import re
 from defines import *
 from functools import partial
+import numpy as np
 
 class DelegateWithSelectorMarker(QtWidgets.QStyledItemDelegate):
     def __init__(self):
@@ -197,3 +199,96 @@ class pandasModel(QtCore.QAbstractTableModel):
         if orientation == QtCore.Qt.Vertical and role == QtCore.Qt.DisplayRole:
             return self._data.index[col]
         return None
+
+class RelPosCursor(pg.InfiniteLine):
+    def __init__(self, startposrel):
+        super().__init__(angle=90,movable=True)
+        self.setVisible(False)
+        self.startposrel = startposrel
+        self.currposrel = startposrel
+    def toggle(self):
+        willbevisible = not self.isVisible()
+        if willbevisible:
+            self.setRelPos(self.startposrel)
+        self.setVisible(willbevisible)
+    def setPos(self,pos):
+        try:
+            x0,x1 = self.getViewBox().viewRange()[0]
+            dx = x1-x0
+            self.currposrel = (pos-x0)/dx
+        except AttributeError:
+            pass
+
+        super().setPos(pos)
+
+    def setRelPos(self, relpos=None):
+        if relpos is None: relpos = self.currposrel
+        x0,x1 = self.getViewBox().viewRange()[0]
+        dx = x1-x0
+        self.setValue(x0+relpos*dx)
+
+    def viewTransformChanged(self):
+        self.setRelPos()
+        return super().viewTransformChanged()
+
+class MeasWidget(QtWidgets.QTableWidget):
+    def __init__(self, plt, name = "meas"):
+        super().__init__()
+        self.plt = plt
+        self.wname = name
+        f = self.font()
+        f.setPointSize(10)
+        self.setFont(f)
+        self.c1 = RelPosCursor(1/3)
+        self.c2 = RelPosCursor(2/3)
+        self.plt.addItem(self.c1)
+        self.plt.addItem(self.c2)
+        self.cursors=dict((idx,c) for idx,c in enumerate([self.c1,self.c2]))
+        self.setHidden(True)
+        self.proxies = [pg.SignalProxy(c.sigPositionChanged, rateLimit=30, slot=self.updateVals) for c in self.cursors.values()]
+        self.values = dict((x,tuple()) for x,_ in enumerate(self.cursors))
+        for k,v in self.cursors.items():
+            v.idx = k
+
+    def toggle(self, becomeVisible=None):
+        if becomeVisible is None: becomeVisible = self.isHidden()
+        if becomeVisible:
+            self.buildMeasTable()
+        self.c1.toggle()
+        self.c2.toggle()
+        self.setHidden(not becomeVisible)
+
+    def buildMeasTable(self):
+        if self.plt.curves and self.rowCount(): return
+        rows = len(self.plt.curves)+1
+        cols = 4
+        self.setRowCount(rows)
+        self.setColumnCount(cols)
+        for row in range(rows):
+            for col in range(cols):
+                item = QtWidgets.QTableWidgetItem()
+                self.setItem(row,col,item)
+        for col in range(cols):
+            self.setColumnWidth(col,75)
+        self.setHorizontalHeaderLabels(["c1","c2","Δ","1/Δ"])
+        self.setVerticalHeaderLabels(["x"]+[f"y{idx}" for idx in range(rows-1)])
+
+    def updateVals(self,c):
+        if self.isHidden():return
+        c = c[-1]
+        xval = c.pos()[0]
+        yvals = tuple(curve.yData[np.searchsorted(curve.xData, xval, side="left")] for curve in self.plt.curves)
+        self.values[c.idx] = (xval,*yvals)
+        if self.values[0] and self.values[1]:
+            self.values["delta"] = np.array(self.values[1])-np.array(self.values[0])
+            with np.errstate(divide='ignore'):
+                tmp = np.ones_like(self.values["delta"])/self.values["delta"]
+            self.values["deltainv"] = np.nan_to_num(tmp)
+        else:
+            self.values["delta"] = (0,0)
+            self.values["deltainv"] = (0,0)
+        self.updateText()
+    def updateText(self):
+            for col,colvals in enumerate(self.values.values()):
+                for row,val in enumerate(colvals):
+                    self.item(row,col).setText(f"{val:.2e}")

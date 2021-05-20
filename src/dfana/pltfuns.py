@@ -2,10 +2,12 @@ import pyqtgraph.dockarea as da
 import pyqtgraph as pg
 import logging
 import helperfuns
+import anafuns
 import math
 from functools import partial
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 import numpy as np
+import sharedWidgets
 
 log = logging.getLogger()
 
@@ -25,13 +27,13 @@ class PltDock(da.Dock):
         if not dssel:dssel = self.createDataOverview()
 
         axes = self.groupByTargetAxis(dssel)
-        if len(axes[0])>1:axes[0]=axes[0][0]#we store the x axis in axes[0]. we cant have more than 1, and by default we plot against the dataframe index
+        if len(axes[0])>1:axes[0]=[axes[0][0]]#we store the x axis in axes[0]. we cant have more than 1, and by default we plot against the dataframe index
         X = axes[0]
         Y=[y for y in axes[1:] if y]
+        if not Y:return
         
         subplts = self.buildPltData(dfs,X,Y)
         self.buildplots(subplts)
-
 
     def buildPltData(self, dfs,x,Y):
         subplts = []
@@ -94,7 +96,7 @@ class PltDock(da.Dock):
         xname = list(xd.keys())[0]
         plt.addLegend()
         plt.showGrid(1,1,0.75)
-        plt.setLabel("left", xname)
+        plt.setLabel("bottom", xname)
         xdata = xd[xname]
         l = len(yd)
         for idx,(yname, ydata) in enumerate(yd.items()):
@@ -114,25 +116,25 @@ class XYplot(QtWidgets.QWidget):
         self.pw = pg.PlotWidget()
         self.pi = self.pw.getPlotItem()
 
-        self.c1 = RelPosCursor(1/3)
-        self.c2 = RelPosCursor(2/3)
-        self.pi.addItem(self.c1)
-        self.pi.addItem(self.c2)
-        self.meas = MeasWidget(self.pi,[self.c1,self.c2])
+        self.meas = sharedWidgets.MeasWidget(self.pi)
 
         l = QtWidgets.QGridLayout()
         self.setLayout(l)
         l.setSpacing(0)
         l.setContentsMargins(0,0,0,0)
-        l.addLayout(self.createButtons(),0,0)
+        buttons, anawidgets = self.createWidgets()
+        l.addLayout(buttons,0,0)
         l.addWidget(self.pw,0,1)
         l.addWidget(self.meas,0,2)
+        for idx, (plt, meas) in enumerate(anawidgets):
+            l.addWidget(plt,idx+1,1)
+            l.addWidget(meas,idx+1,2)
         l.setColumnStretch(0,1)
         l.setColumnStretch(1,20)
         l.setColumnStretch(2,0)
         self.l = l
 
-    def createButtons(self):
+    def createWidgets(self):
         buttons = QtWidgets.QVBoxLayout()
         buttons.setSpacing(0)
         buttons.setContentsMargins(0,0,0,0)
@@ -144,102 +146,22 @@ class XYplot(QtWidgets.QWidget):
         cursbutton = QtWidgets.QPushButton("cursor")
         buttons.addWidget(cursbutton)
         cursbutton.clicked.connect(self.togglecursors)
-        return buttons
+
+        anawidgets = []
+        for k,fn in anafuns.getFuns().items():
+            but = fn(self.pi)
+            buttons.addWidget(but)
+            anawidgets.append((but.ana_getPlotWidget(), but.ana_getMeasWidget()))
+            cursbutton.clicked.connect(but.ana_toggleMeas)
+
+        return buttons, anawidgets
 
     def togglecursors(self):
         if self.meas.isHidden():    self.l.setColumnStretch(2,5)
         else:                       self.l.setColumnStretch(2,0)
         self.meas.toggle()
-        
-        self.c1.toggle()
-        self.c2.toggle()
 
     def getPlotItem(self):
         return self.pw.getPlotItem()
     def toggle(self):
         self.setHidden(not self.isHidden())
-
-class RelPosCursor(pg.InfiniteLine):
-    def __init__(self, startposrel):
-        super().__init__(angle=90,movable=True)
-        self.setVisible(False)
-        self.startposrel = startposrel
-        self.currposrel = startposrel
-    def toggle(self):
-        willbevisible = not self.isVisible()
-        if willbevisible:
-            self.setRelPos(self.startposrel)
-        self.setVisible(willbevisible)
-    def setPos(self,pos):
-        try:
-            x0,x1 = self.getViewBox().viewRange()[0]
-            dx = x1-x0
-            self.currposrel = (pos-x0)/dx
-        except AttributeError:
-            pass
-
-        super().setPos(pos)
-
-    def setRelPos(self, relpos=None):
-        if relpos is None: relpos = self.currposrel
-        x0,x1 = self.getViewBox().viewRange()[0]
-        dx = x1-x0
-        self.setValue(x0+relpos*dx)
-
-    def viewTransformChanged(self):
-        self.setRelPos()
-        return super().viewTransformChanged()
-
-class MeasWidget(QtWidgets.QTableWidget):
-    def __init__(self, plt, cursors):
-        super().__init__()
-        self.plt = plt
-        f = self.font()
-        f.setPointSize(10)
-        self.setFont(f)
-        self.cursors=dict((idx,c) for idx,c in enumerate(cursors))
-        self.setHidden(True)
-        self.proxies = [pg.SignalProxy(c.sigPositionChanged, rateLimit=30, slot=self.updateVals) for c in cursors]
-        self.values = dict((x,tuple()) for x,_ in enumerate(self.cursors))
-        for k,v in self.cursors.items():
-            v.idx = k
-
-    def toggle(self):
-        becomevisible = self.isHidden()
-        if becomevisible:
-            self.buildMeasTable()
-        self.setHidden(not becomevisible)
-
-    def buildMeasTable(self):
-        if self.plt.curves and self.rowCount(): return
-        rows = len(self.plt.curves)+1
-        cols = 4
-        self.setRowCount(rows)
-        self.setColumnCount(cols)
-        for row in range(rows):
-            for col in range(cols):
-                item = QtWidgets.QTableWidgetItem()
-                self.setItem(row,col,item)
-        for col in range(cols):
-            self.setColumnWidth(col,75)
-        self.setHorizontalHeaderLabels(["c1","c2","Δ","1/Δ"])
-        self.setVerticalHeaderLabels(["x"]+[f"y{idx}" for idx in range(rows-1)])
-
-    def updateVals(self,c):
-        if self.isHidden():return
-        c = c[-1]
-        xval = c.pos()[0]
-        yvals = tuple(curve.yData[np.searchsorted(curve.xData, xval, side="left")] for curve in self.plt.curves)
-        self.values[c.idx] = (xval,*yvals)
-        if self.values[0] and self.values[1]:
-            self.values["delta"] = np.array(self.values[1])-np.array(self.values[0])
-            if any(x==0.0 for x in self.values["delta"]): self.values["deltainv"] = tuple(0 for x in self.values["delta"])
-            else: self.values["deltainv"] = np.ones_like(self.values["delta"])/self.values["delta"]
-        else:
-            self.values["delta"] = (0,0)
-            self.values["deltainv"] = (0,0)
-        self.updateText()
-    def updateText(self):
-            for col,colvals in enumerate(self.values.values()):
-                for row,val in enumerate(colvals):
-                    self.item(row,col).setText(f"{val:.2e}")

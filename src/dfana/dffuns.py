@@ -57,7 +57,7 @@ class DataFrameDock(da.Dock):
         app.data["dfs"] = {}
 
         super().__init__("DataFrames", size=(DEFAULT_W/3,DEFAULT_H/5))
-        self.setStretch(x=DEFAULT_W/3,y=DEFAULT_H/5)
+        self.setStretch(x=DEFAULT_W/5*2,y=DEFAULT_H/5)
         self.parsequeue=[]
         self.resultsPending = 0
         self.parsing = False
