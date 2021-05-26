@@ -110,7 +110,6 @@ class PltDock(da.Dock):
         return pw
 
 class XYplot(QtWidgets.QWidget):
-
     def __init__(self):
         super().__init__()
         self.pw = pg.PlotWidget()
@@ -119,16 +118,18 @@ class XYplot(QtWidgets.QWidget):
         self.meas = sharedWidgets.MeasWidget(self.pi)
 
         l = QtWidgets.QGridLayout()
+        spl = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+        spl.addWidget(self.pw)
         self.setLayout(l)
         l.setSpacing(0)
         l.setContentsMargins(0,0,0,0)
         buttons, anawidgets = self.createWidgets()
         l.addLayout(buttons,0,0)
-        l.addWidget(self.pw,0,1)
+        l.addWidget(spl,0,1)
         l.addWidget(self.meas,0,2)
         for idx, (plt, meas) in enumerate(anawidgets):
-            l.addWidget(plt,idx+1,1)
-            l.addWidget(meas,idx+1,2)
+            spl.addWidget(plt)#,idx+1,1)
+            spl.addWidget(meas)#,idx+1,2)
         l.setColumnStretch(0,1)
         l.setColumnStretch(1,20)
         l.setColumnStretch(2,0)
@@ -144,22 +145,26 @@ class XYplot(QtWidgets.QWidget):
         closebutton.clicked.connect(self.close)
 
         cursbutton = QtWidgets.QPushButton("cursor")
+        cursbutton.setCheckable(True)
+        self.showCursors = False
         buttons.addWidget(cursbutton)
-        cursbutton.clicked.connect(self.togglecursors)
+        cursbutton.clicked.connect(self.showcursorsfun)
+        self.cursbutton = cursbutton
 
         anawidgets = []
         for k,fn in anafuns.getFuns().items():
             but = fn(self.pi)
             buttons.addWidget(but)
             anawidgets.append((but.ana_getPlotWidget(), but.ana_getMeasWidget()))
-            cursbutton.clicked.connect(but.ana_toggleMeas)
+            cursbutton.clicked.connect(but.ana_showMeas)
 
         return buttons, anawidgets
 
-    def togglecursors(self):
-        if self.meas.isHidden():    self.l.setColumnStretch(2,5)
-        else:                       self.l.setColumnStretch(2,0)
-        self.meas.toggle()
+    def showcursorsfun(self, show):
+        self.showCursors = show
+        if self.showCursors:    self.l.setColumnStretch(2,5)
+        else:                   self.l.setColumnStretch(2,0)
+        self.meas.setHidden(not self.showCursors)
 
     def getPlotItem(self):
         return self.pw.getPlotItem()
