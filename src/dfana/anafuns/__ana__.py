@@ -3,24 +3,26 @@ class Ana(QtWidgets.QPushButton):
     name = "analysis placeholder"
     def __init__(self,parent):
         super().__init__(self.name)
-        self.ana_pltw = None
+        self.ana_widget = None
         self.ana_parent = parent
-        self.ana_measw = None
-        self.clicked.connect(self.ana_toggle)
-    def ana_toggle(self):
-        setHidden = not self.ana_pltw.isHidden()
-        self.ana_pltw.setHidden(setHidden)
-        self.ana_measw.setHidden(setHidden)
-    def ana_toggleMeas(self):
-        self.ana_measw.toggle(self.ana_pltw.isVisible() and not self.ana_measw.isVisible())
+        self.setCheckable(True)
+        self.shouldShowMeas = False
+        self.clicked.connect(self.ana_show)
 
-    def ana_getPlotWidget(self):
-        if not self.ana_pltw:
-            self.ana_pltw = QtWidgets.QLabel("plt",parent=self)
-            self.ana_pltw.setHidden(True)
-        return self.ana_pltw
-    def ana_getMeasWidget(self):
-        if not self.ana_measw:
-            self.ana_measw = QtWidgets.QLabel("meas",parent=self)
-            self.ana_measw.setHidden(True)
-        return self.ana_measw
+    def ana_show(self, show):
+        setHidden = not show
+        self.ana_widget.setHidden(setHidden)
+        showmeas = self.shouldShowMeas
+        self.ana_showMeas(showmeas)
+
+    def ana_showMeas(self, show):
+        self.shouldShowMeas = show
+        try: self.ana_widget.showcursorsfun(self.shouldShowMeas and self.ana_widget.isVisible())
+        except AttributeError:pass
+
+    def ana_getWidget(self):
+        if not self.ana_widget:
+            self.ana_widget = QtWidgets.QLabel("plt",parent=self)
+            self.ana_widget.setHidden(True)
+        self.ana_showMeas(False)
+        return self.ana_widget

@@ -206,11 +206,9 @@ class RelPosCursor(pg.InfiniteLine):
         self.setVisible(False)
         self.startposrel = startposrel
         self.currposrel = startposrel
-    def toggle(self):
-        willbevisible = not self.isVisible()
-        if willbevisible:
-            self.setRelPos(self.startposrel)
-        self.setVisible(willbevisible)
+    def setVisible(self, vis):
+        if vis:self.setRelPos(self.startposrel)
+        super().setVisible(vis)
     def setPos(self,pos):
         try:
             x0,x1 = self.getViewBox().viewRange()[0]
@@ -218,7 +216,6 @@ class RelPosCursor(pg.InfiniteLine):
             self.currposrel = (pos-x0)/dx
         except AttributeError:
             pass
-
         super().setPos(pos)
 
     def setRelPos(self, relpos=None):
@@ -230,6 +227,76 @@ class RelPosCursor(pg.InfiniteLine):
     def viewTransformChanged(self):
         self.setRelPos()
         return super().viewTransformChanged()
+        
+class RelPosLinearRegion(pg.LinearRegionItem):
+    def __init__(self,parent,updatefun):
+        super().__init__()
+        self.currRelRegion = [.25,.75]
+        self.updatefun = updatefun
+        self.plt = parent
+        self.setVisible(False)
+        parent.addItem(self)
+        self.sigRegionChanged.connect(updatefun)
+        self.sigRegionChanged.connect(self.updateRelRegion)
+        
+    def setVisible(self, vis):
+        if vis and not self.isVisible():
+            ((x0,x1),(y0,y1)) = self.plt.viewRange()
+            self.setRelRegion([.25,.75])
+        super().setVisible(vis)
+
+    def updateRelRegion(self,_):
+        reg = self.getRegion()
+        x0,x1 = self.getViewBox().viewRange()[0]
+        dx = x1-x0
+        self.currRelRegion = [(reg[0]-x0)/dx, (reg[1]-x0)/dx]
+
+    def setRelRegion(self, relRegion=None):
+        if relRegion is None: relRegion = self.currRelRegion
+        x0,x1 = self.plt.viewRange()[0]
+        dx = x1-x0
+        self.setRegion([x0+dx*relRegion[0], x0+dx*relRegion[1]])
+
+    def setRegion(self, reg):
+        x0,x1 = self.getViewBox().viewRange()[0]
+        dx = x1-x0
+        self.currRelRegion = [(reg[0]-x0)/dx, (reg[1]-x0)/dx]
+        super().setRegion(reg)
+
+    def viewTransformChanged(self):
+        self.setRelRegion()
+        fn = partial(self.updatefun, self)
+        QtCore.QTimer.singleShot(0, fn)
+        return super().viewTransformChanged()
+
+class PlotWithMeasWidget(QtWidgets.QWidget):
+    def __init__(self,parent=None):
+        super().__init__(parent=parent)
+        self.pw = pg.PlotWidget()
+        self.pi = self.getPlotItem()
+        self.meas = MeasWidget(self.pi)
+        self.pw.showcursorsfun = lambda s: self.showcursorsfun(s)
+
+        l = QtWidgets.QGridLayout()
+        l.setSpacing(0)
+        l.setContentsMargins(0,0,0,0)
+        self.setLayout(l)
+        l.addWidget(self.pw,0,0)
+        l.addWidget(self.meas,0,1)
+        l.setColumnStretch(0,39)
+        l.setColumnStretch(1,0)
+        self.showCursors = False
+        self.l = l
+
+    def showcursorsfun(self, show):
+        self.showCursors = show
+        if self.showCursors:    self.l.setColumnStretch(1,10)
+        else:                   self.l.setColumnStretch(1,0)
+        self.meas.setHidden(not self.showCursors)
+
+    def getPlotItem(self):
+        return self.pw.getPlotItem()
+
 
 class MeasWidget(QtWidgets.QTableWidget):
     def __init__(self, plt, name = "meas"):
@@ -250,13 +317,12 @@ class MeasWidget(QtWidgets.QTableWidget):
         for k,v in self.cursors.items():
             v.idx = k
 
-    def toggle(self, becomeVisible=None):
-        if becomeVisible is None: becomeVisible = self.isHidden()
-        if becomeVisible:
-            self.buildMeasTable()
-        self.c1.toggle()
-        self.c2.toggle()
-        self.setHidden(not becomeVisible)
+    def setHidden(self, hidden):
+        vis = not hidden
+        if vis:self.buildMeasTable()
+        self.c1.setVisible(vis)
+        self.c2.setVisible(vis)
+        super().setHidden(hidden)
 
     def buildMeasTable(self):
         if self.plt.curves and self.rowCount(): return

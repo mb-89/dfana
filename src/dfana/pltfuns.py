@@ -84,13 +84,13 @@ class PltDock(da.Dock):
         for idx,(xd,yd) in enumerate(pltdata):
             if not yd:continue
             plt = self.buildplot(xd,yd,xlink)
-            if xlink is None:xlink=plt.pw
+            if xlink is None:xlink=plt.pw.pw
             splitter.addWidget(plt)
         self.addWidget(splitter,row=idx,col=0)
 
     def buildplot(self, xd,yd,xlink):
-        pw = XYplot()
-        plt = pw.getPlotItem()
+        pw = PlotDockSubplot()
+        plt = pw.pw.pi
         plt.setDownsampling(auto=True,mode="peak")
         plt.setClipToView(True)
         xname = list(xd.keys())[0]
@@ -109,14 +109,10 @@ class PltDock(da.Dock):
             plt.setXLink(xlink)
         return pw
 
-class XYplot(QtWidgets.QWidget):
+class PlotDockSubplot(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
-        self.pw = pg.PlotWidget()
-        self.pi = self.pw.getPlotItem()
-
-        self.meas = sharedWidgets.MeasWidget(self.pi)
-
+        self.pw = sharedWidgets.PlotWithMeasWidget()
         l = QtWidgets.QGridLayout()
         spl = QtWidgets.QSplitter(QtCore.Qt.Vertical)
         spl.addWidget(self.pw)
@@ -126,13 +122,10 @@ class XYplot(QtWidgets.QWidget):
         buttons, anawidgets = self.createWidgets()
         l.addLayout(buttons,0,0)
         l.addWidget(spl,0,1)
-        l.addWidget(self.meas,0,2)
-        for idx, (plt, meas) in enumerate(anawidgets):
-            spl.addWidget(plt)#,idx+1,1)
-            spl.addWidget(meas)#,idx+1,2)
+        for idx, plt in enumerate(anawidgets):
+            spl.addWidget(plt)
         l.setColumnStretch(0,1)
         l.setColumnStretch(1,20)
-        l.setColumnStretch(2,0)
         self.l = l
 
     def createWidgets(self):
@@ -140,33 +133,24 @@ class XYplot(QtWidgets.QWidget):
         buttons.setSpacing(0)
         buttons.setContentsMargins(0,0,0,0)
 
-        closebutton = QtWidgets.QPushButton("X")
+        closebutton = QtWidgets.QPushButton("close")
         buttons.addWidget(closebutton)
         closebutton.clicked.connect(self.close)
 
         cursbutton = QtWidgets.QPushButton("cursor")
         cursbutton.setCheckable(True)
-        self.showCursors = False
         buttons.addWidget(cursbutton)
-        cursbutton.clicked.connect(self.showcursorsfun)
+        cursbutton.clicked.connect(self.pw.showcursorsfun)
         self.cursbutton = cursbutton
 
         anawidgets = []
         for k,fn in anafuns.getFuns().items():
-            but = fn(self.pi)
+            but = fn(self.pw.pi)
             buttons.addWidget(but)
-            anawidgets.append((but.ana_getPlotWidget(), but.ana_getMeasWidget()))
+            anawidgets.append(but.ana_getWidget())
             cursbutton.clicked.connect(but.ana_showMeas)
 
         return buttons, anawidgets
 
-    def showcursorsfun(self, show):
-        self.showCursors = show
-        if self.showCursors:    self.l.setColumnStretch(2,5)
-        else:                   self.l.setColumnStretch(2,0)
-        self.meas.setHidden(not self.showCursors)
-
-    def getPlotItem(self):
-        return self.pw.getPlotItem()
     def toggle(self):
         self.setHidden(not self.isHidden())
