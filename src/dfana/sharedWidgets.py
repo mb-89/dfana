@@ -201,17 +201,19 @@ class pandasModel(QtCore.QAbstractTableModel):
         return None
 
 class RelPosCursor(pg.InfiniteLine):
-    def __init__(self, startposrel):
-        super().__init__(angle=90,movable=True)
+    def __init__(self, startposrel, vertical = False):
+        super().__init__(angle=90 if not vertical else 0,movable=True)
         self.setVisible(False)
         self.startposrel = startposrel
         self.currposrel = startposrel
+        self.vertical = vertical
     def setVisible(self, vis):
         if vis:self.setRelPos(self.startposrel)
         super().setVisible(vis)
     def setPos(self,pos):
         try:
-            x0,x1 = self.getViewBox().viewRange()[0]
+            range = self.getViewBox().viewRange()
+            x0,x1 = range[0] if not self.vertical else range[1]
             dx = x1-x0
             self.currposrel = (pos-x0)/dx
         except AttributeError:
@@ -220,7 +222,8 @@ class RelPosCursor(pg.InfiniteLine):
 
     def setRelPos(self, relpos=None):
         if relpos is None: relpos = self.currposrel
-        x0,x1 = self.getViewBox().viewRange()[0]
+        range = self.getViewBox().viewRange()
+        x0,x1 = range[0] if not self.vertical else range[1]
         dx = x1-x0
         self.setValue(x0+relpos*dx)
 
@@ -358,3 +361,80 @@ class MeasWidget(QtWidgets.QTableWidget):
             for col,colvals in enumerate(self.values.values()):
                 for row,val in enumerate(colvals):
                     self.item(row,col).setText(f"{val:.2e}")
+
+class ImageMeasWidget(QtWidgets.QWidget):
+    def __init__(self, plt, name = "meas"):
+        super().__init__()
+        self.plt = plt
+        self.wname = name
+        f = self.font()
+        f.setPointSize(10)
+        self.setFont(f)
+        self.c1 = RelPosCursor(0.5)
+        self.c2 = RelPosCursor(0.5, vertical=True)
+        self.plt.addItem(self.c1)
+        self.plt.addItem(self.c2)
+        self.cursors=dict((idx,c) for idx,c in enumerate([self.c1,self.c2]))
+        self.setHidden(True)
+        self.values = dict((x,tuple()) for x,_ in enumerate(self.cursors))
+        for k,v in self.cursors.items():
+            v.idx = k
+        self.proxy = pg.SignalProxy(self.plt.scene().sigMouseMoved, rateLimit=30, slot=self.mouseMoved)
+        self.l = QtWidgets.QVBoxLayout()
+        self.table = QtWidgets.QTableWidget()
+        self.table.setMinimumHeight(75)
+        self.l.addWidget(self.table)
+        self.buildMeasTable()
+        self.xplt = pg.PlotWidget(labels={"bottom":"x","left":"z"})
+        self.yplt = pg.PlotWidget(labels={"bottom":"y","left":"z"})
+        self.l.addWidget(self.yplt)
+        self.l.addWidget(self.xplt)
+        self.l.setSpacing(20)
+        self.l.setContentsMargins(0,0,0,0)
+        self.setLayout(self.l)
+
+    def buildMeasTable(self):
+        rows=1
+        cols=3
+        t = self.table
+        t.setRowCount(rows)
+        t.setColumnCount(cols)
+        for row in range(rows):
+            for col in range(cols):
+                item = QtWidgets.QTableWidgetItem()
+                t.setItem(row,col,item)
+        for col in range(cols):
+            t.setColumnWidth(col,75)
+        t.setHorizontalHeaderLabels(["x","y","z"])
+        t.setVerticalHeaderLabels(["val"])
+
+    def mouseMoved(self,evt):
+        if not self.isVisible():return
+        pos = evt[0]  ## using signal proxy turns original arguments into a tuple
+        if not self.plt.sceneBoundingRect().contains(pos):return
+        mousePoint = self.plt.vb.mapSceneToView(pos)
+        self.c1.setPos(mousePoint.x())
+        self.c2.setPos(mousePoint.y())
+        scenePos = self.plt.items[0].mapFromScene(pos)
+        data = self.plt.items[0].image
+        nRows, nCols = data.shape 
+        row, col = int(scenePos.y()), int(scenePos.x())
+        if (0 <= row < nRows) and (0 <= col < nCols):
+                x = mousePoint.x()
+                y = mousePoint.y()
+                z = data[row, col]
+                self.table.item(0,0).setText(f"{x:.2e}")
+                self.table.item(0,1).setText(f"{y:.2e}")
+                self.table.item(0,2).setText(f"{z:.2e}")
+                self.xplt.clear()
+                self.yplt.clear()
+                self.xplt.plot(data[row, :])
+                self.xplt.addItem(pg.InfiniteLine(col))
+                self.yplt.plot(data[:, col])
+                self.yplt.addItem(pg.InfiniteLine(row))
+
+    def setHidden(self, hidden):
+        vis = not hidden
+        self.c1.setVisible(vis)
+        self.c2.setVisible(vis)
+        super().setHidden(hidden)

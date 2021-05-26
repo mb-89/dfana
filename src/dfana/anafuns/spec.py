@@ -48,7 +48,7 @@ class SpecContainer(QtWidgets.QWidget):
         l.setSpacing(0)
         l.setContentsMargins(0,0,0,0)
         self.pw = SpecPlot()
-        self.meas = QtWidgets.QWidget()
+        self.meas = sharedWidgets.ImageMeasWidget(self.pw.pi)
         self.pw.showcursorsfun = lambda s: self.showcursorsfun(s)
         self.range = [0,0]
         l.addWidget(self.pw,0,0)
@@ -72,7 +72,7 @@ class SpecContainer(QtWidgets.QWidget):
 class SpecPlot(QtWidgets.QWidget):
     winlenbase = 256
     winlenmaxrel = 8
-    redrawSig = QtCore.Signal()
+    redrawSig = QtCore.Signal(bool)
 
     def __init__(self):
         super().__init__()
@@ -127,10 +127,10 @@ class SpecPlot(QtWidgets.QWidget):
 
     def redraw(self,_=None):
         if not self.isVisible():return
-        self.redrawSig.emit()
+        self.redrawSig.emit(True)
 
-    def _redraw(self,_=None):
-        calcAborted = self.calc()
+    def _redraw(self,_=None,onlyOnChange=False):
+        calcAborted = self.calc(onlyOnChange)
         if calcAborted:return
         self.img.setImage(self.Sxx)
         self.img.resetTransform()
@@ -142,13 +142,20 @@ class SpecPlot(QtWidgets.QWidget):
 
         rect = QtCore.QRectF(x0,y0,dx,dy)
         self.img.setRect(rect)
-        self.pi.setLimits(yMin=y0, yMax=y0+dy, xMin=y0,xMax=x0+dx)
         self.hist.setLevels(np.min(self.Sxx), np.percentile(self.Sxx,97))
         for x in self.pi.axes:
             ax = self.pi.getAxis(x)
             ax.setZValue(1)
+        Y = self.Y/np.max(np.abs(self.Y))*dy
+        try:
+            self.pltline.setData(self.T,Y)
+        except AttributeError:
+            pen = fn.mkPen((1,1),style=QtCore.Qt.DotLine)
+            self.pltline = self.pw.plot(self.T,Y,pen=pen)
+        self.pi.setLimits(yMin=y0, yMax=y0+dy, xMin=y0,xMax=x0+dx)
 
-    def calc(self):
+
+    def calc(self, onlyOnChange=False):
         colname = self.colsel.currentText()
         col = [x for x in self.datasrc.curves if x.name() == colname][0]
         range=self.range
@@ -160,7 +167,11 @@ class SpecPlot(QtWidgets.QWidget):
         Y = Y[mask]
         L = len(T)
         newt0t1 = [T[0],T[-1]]
-        if newt0t1 == self.t0t1:return -1
+        tchanged = not (newt0t1 == self.t0t1)
+        self.T = T
+        self.Y = Y
+
+        if (not tchanged) and onlyOnChange:return -1
         self.t0t1 = newt0t1
         self.fs = (T[-1]-T[0])/len(T)
         windowLen = self.winlen.value()
