@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "args": ["-read", "I:/006_projects/data.examples/ex*.csv"]
+            "args": ["-read", "I:/006_projects/data.examples/spec*"]
         }
     ]
 }
