@@ -112,7 +112,7 @@ class Parser(__parser__.Parser):
             if signame in colnames: quantityName = "IGNORE"
             else:                   colnames.append(signame)
             unit = col.find("Unit").text
-            fullname = signame+"_"+quantityName#+"_"+unit
+            fullname = signame+"_"+quantityName+"_"+unit
             if   quantityName is None:
                 raise UserWarning("invalid rawdata")
 

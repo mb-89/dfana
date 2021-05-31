@@ -156,7 +156,7 @@ class DataFrameDock(da.Dock):
         if self.resultsPending==0:
             log.info("all parser threads done.")
 
-def getDFoverview(dfs):
+def getMetaDataoverview(dfs):
     if isinstance(dfs, dict):dfs = dfs.values()
     if len(dfs)<=1: return None
     allMetaData = [x.attrs for x in dfs]
@@ -188,4 +188,22 @@ def getDFoverview(dfs):
     df.set_index("_idx",inplace=True)
     df.sort_index(inplace=True)
     df.attrs = header
+    return df
+
+def getDataOverview(dfs):
+    if isinstance(dfs, dict):dfs = dfs.values()
+    allCols = [x.columns for x in dfs]
+    header = sorted(list(set(itertools.chain(*allCols))))
+    rows = []
+    for df in dfs:
+        row = {}
+        row["_idx"] = df.attrs["_idx"]
+        row["dfname"] = df.attrs["name"]
+        row |= dict((x,("" if x not in df else "X")) for x in header)
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    df.set_index("_idx",inplace=True)
+    df.sort_index(inplace=True)
+    #df.attrs = header
     return df

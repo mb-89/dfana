@@ -100,9 +100,12 @@ class ActionsDock(da.Dock):
 
         self.plt = QtWidgets.QPushButton("plot")
         self.meta = QtWidgets.QPushButton("meta")
+        self.dataOverview = QtWidgets.QPushButton("data overview")
+        l.addWidget(self.dataOverview)
         l.addWidget(self.meta)
         l.addWidget(self.plt)
         self.meta.clicked.connect(self.showMetaData)
+        self.dataOverview.clicked.connect(self.showDataOverview)
         self.plt.clicked.connect(self.pltsig.emit)
         self.metaView = None
 
@@ -112,7 +115,18 @@ class ActionsDock(da.Dock):
         app = pg.mkQApp()
         dfs = app.data["dfs"]
         if not dfs:return
-        dfmeta = dffuns.getDFoverview(dfs)
+        dfmeta = dffuns.getMetaDataoverview(dfs)
         self.metaView = sharedWidgets.DFview(dfmeta)
         self.metaView.setWindowTitle("Dataframe metadata overview")
+        self.metaView.show()
+
+    def showDataOverview(self):
+        if self.metaView:
+            self.metaView.close()
+        app = pg.mkQApp()
+        dfs = app.data["dfs"]
+        if not dfs:return
+        dfmeta = dffuns.getDataOverview(dfs)
+        self.metaView = sharedWidgets.DFview(dfmeta)
+        self.metaView.setWindowTitle("Dataframe content overview")
         self.metaView.show()

@@ -85,16 +85,20 @@ class SpecPlot(QtWidgets.QWidget):
         self.osziquant.currentTextChanged.connect(self._redraw)
         self.osziquant.setPlaceholderText("<qantity that oscillates at orders of base>")
         self.baseconverter = QtWidgets.QDoubleSpinBox()
-        self.baseconverter.setPrefix("conversion factor base -> Hz: ")
+        self.baseconverter.setPrefix("factor base -> Hz: ")
         self.baseconverter.setValue(1)
-        self.baseconverter.setDecimals(4)
+        self.baseconverter.setDecimals(6)
         self.osziconverter = QtWidgets.QDoubleSpinBox()
-        self.osziconverter.setPrefix("conversion factor oszi -> Hz: ")
-        self.osziconverter.setSuffix(" [ if applicable]")
+        self.osziconverter.setPrefix("factor oszi -> Hz: ")
         self.osziconverter.setValue(1)
-        self.osziconverter.setDecimals(4)
+        self.osziconverter.setDecimals(6)
+        self.timeconverter = QtWidgets.QDoubleSpinBox()
+        self.timeconverter.setPrefix("factor time -> s: ")
+        self.timeconverter.setValue(1)
+        self.timeconverter.setDecimals(6)
         self.osziconverter.valueChanged.connect(self._redraw)
         self.baseconverter.valueChanged.connect(self._redraw)
+        self.timeconverter.valueChanged.connect(self._redraw)
 
         self.pw = pg.PlotWidget(self)
         self.pw.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding,QtWidgets.QSizePolicy.MinimumExpanding)
@@ -110,9 +114,10 @@ class SpecPlot(QtWidgets.QWidget):
         l1.setSpacing(0)
         l1.setContentsMargins(0,0,0,0)
         l1.addWidget(self.basequant)
-        l1.addWidget(self.baseconverter)
         l1.addWidget(self.osziquant)
+        l1.addWidget(self.baseconverter)
         l1.addWidget(self.osziconverter)
+        l1.addWidget(self.timeconverter)
         l.addLayout(l1)
         l.addWidget(self.pw)
         l.addWidget(self.buildHist())
@@ -166,6 +171,7 @@ class SpecPlot(QtWidgets.QWidget):
         osziname = self.osziquant.currentText()
         basefak = self.baseconverter.value()
         oszifak = self.osziconverter.value()
+        timefak = self.timeconverter.value()
         try:
             basecol = [x for x in self.datasrc.curves if x.name() == basename][0]
             oszicol = [x for x in self.datasrc.curves if x.name() == osziname][0]
@@ -186,7 +192,7 @@ class SpecPlot(QtWidgets.QWidget):
         basevals = basecol.yData[mask]*basefak
         oszivals = oszicol.yData[mask]*oszifak
 
-        angle = integrate.cumtrapz(basevals, T, initial=0)
+        angle = integrate.cumtrapz(basevals, T*timefak, initial=0)
         df = pd.DataFrame(data={"y":oszivals,"x":angle},index=angle)
         df.drop_duplicates(inplace=True)
         try: finterp = interpolate.interp1d(df.index, df["y"], kind='cubic')

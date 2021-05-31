@@ -43,10 +43,8 @@ class PltDock(da.Dock):
             traces = tuple(self.rawdata["dss"][y] for y in subplot)
             for df in dfs:
                 #collect x data
-                if x is None: xdata = {"idx":df.index.values}
-                else:
-                    try: xdata = {x: df[x]}
-                    except: continue #if we dont find the x-data, we skip this dataframe
+                try: xdata = {x: df[x]}
+                except: xdata = {"idx":df.index.values}
                 #collect y data
                 ydata = {}
                 for idx,trc in enumerate(traces):
@@ -103,7 +101,7 @@ class PltDock(da.Dock):
             try:
                 plt.plot(x=xdata,y=ydata,pen=(idx,l), name=yname)
             except:
-                log.error(f"could not plot column {name}")
+                log.error(f"could not plot column {yname}")
                 continue
         if xlink is not None:
             plt.setXLink(xlink)
