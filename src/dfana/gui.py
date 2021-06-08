@@ -13,6 +13,8 @@ import pltfuns
 import sharedWidgets
 import gc
 from defines import *
+import os
+import os.path as op
 
 log = logging.getLogger()
 
@@ -101,9 +103,14 @@ class ActionsDock(da.Dock):
         self.plt = QtWidgets.QPushButton("plot")
         self.meta = QtWidgets.QPushButton("meta")
         self.dataOverview = QtWidgets.QPushButton("data overview")
+        self.srcbut = QtWidgets.QPushButton("open dfana src")
+
+        l.addWidget(self.srcbut)
         l.addWidget(self.dataOverview)
         l.addWidget(self.meta)
         l.addWidget(self.plt)
+
+        self.srcbut.clicked.connect(lambda: os.startfile(op.dirname(__file__)))
         self.meta.clicked.connect(self.showMetaData)
         self.dataOverview.clicked.connect(self.showDataOverview)
         self.plt.clicked.connect(self.pltsig.emit)
