@@ -212,7 +212,8 @@ class CsvParserGUI(QtWidgets.QDialog):
             entry = self.params.cellWidget(idx,0).text()
             param = sig.parameters[keys[idx]]
             if entry != "":
-                if (param.annotation != inspect._empty) and isinstance(entry,param.annotation.__args__):dct[param.name] = entry
+                if (param.annotation != inspect._empty) and any((isinstance(entry,type(x)) for x in param.annotation.__args__)):
+                    dct[param.name] = entry
                 else:
                     try: dct[param.name] = eval(entry)
                     except:pass

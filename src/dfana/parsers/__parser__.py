@@ -48,7 +48,9 @@ class Parser(QtCore.QRunnable):
     def run(self):
         dfs_raw = self.parse_raw()
         dfs = self.postprocess(dfs_raw)
-        self.signaller.done.emit({"path":self.path, "result": dfs})
+        res = {"path":self.path, "result": dfs}
+        self.signaller.done.emit(res)
+        return res
 
 class Postprocessor():
     RAWCOLS = ["roh","raw"]
