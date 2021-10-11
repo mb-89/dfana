@@ -216,7 +216,9 @@ class CsvParserGUI(QtWidgets.QDialog):
                     dct[param.name] = entry
                 else:
                     try: dct[param.name] = eval(entry)
-                    except:pass
+                    except:
+                        if isinstance(entry, str):
+                            dct[param.name] = entry
         dct['filepath_or_buffer'] = io.StringIO(self.txt)
         self.result = dict((k,v) for k,v in dct.items())
         fp = dct.pop('filepath_or_buffer')

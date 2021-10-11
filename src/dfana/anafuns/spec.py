@@ -62,7 +62,7 @@ class SpecContainer(QtWidgets.QWidget):
 
     def showcursorsfun(self, show):
         self.showCursors = show
-        if self.showCursors:    self.l.setColumnStretch(1,10)
+        if self.showCursors:    self.l.setColumnStretch(1,15)
         else:                   self.l.setColumnStretch(1,0)
         self.meas.setHidden(not self.showCursors)
 
@@ -173,7 +173,7 @@ class SpecPlot(QtWidgets.QWidget):
 
         if (not tchanged) and onlyOnChange:return -1
         self.t0t1 = newt0t1
-        self.fs = (T[-1]-T[0])/len(T)
+        self.fs = 1.0/((T[-1]-T[0])/len(T))
         windowLen = self.winlen.value()
 
         self.f, self.t, self.Sxx = signal.spectrogram(
