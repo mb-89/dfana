@@ -1,3 +1,1 @@
-import sys
-import os.path as op
-sys.path.append(op.dirname(__file__))
+from .__metadata__ import __version__  # noqa: F401
