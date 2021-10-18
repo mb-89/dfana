@@ -1,7 +1,7 @@
 import logging
 import argparse
 from x2df import x2df
-from dfana import examples
+from x2df.examples import examples
 from .__metadata__ import __version__
 import pandas as pd
 
