@@ -1,7 +1,2 @@
-numpy==1.19.3
-pandas==1.2.4
+git+git://github.com/mb-89/x2df
 pipreqs==0.4.10
-py7zr==0.16.1
-pyarrow==5.0.0
-pytest==6.2.5
-scipy==1.5.4

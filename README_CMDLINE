@@ -1,12 +1,9 @@
-usage: parses given glob-style paths and extracts dataframes. Dumps all dataframes into the dst directory
-       [-h] [--dstfmt {parquet}] [-?] [-v] [srcs ...] [dst]
+usage: parses given glob-style paths and extracts dataframes. Plots all the given dataframes [-h] [-?] [-v] [srcs ...]
 
 positional arguments:
-  srcs                glob-style paths that will be parsed
-  dst                 destination path for the results.
+  srcs           glob-style paths that will be parsed
 
 optional arguments:
-  -h, --help          show this help message and exit
-  --dstfmt {parquet}  data format for the results. Defaults to parquet.
-  -?                  show this help message and exit
-  -v, --version       prints version
+  -h, --help     show this help message and exit
+  -?             show this help message and exit
+  -v, --version  prints version
