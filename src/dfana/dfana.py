@@ -5,7 +5,29 @@ from x2df.examples import examples
 from .__metadata__ import __version__
 import pandas as pd
 
+import matplotlib.pyplot as plt
+import pandas_bokeh  # noqa:F401
+import functools
+from dfana import pyqtgraphbackend  # noqa:F401
+import pyqtgraph as pg
+
+
 log = logging.getLogger("dfana")
+
+
+@functools.cache
+def getAvailableBackends():
+    beL = ["pandas_bokeh", "matplotlib", "dfana"]
+    df = pd.DataFrame()
+    for be in beL:  # we need to do this so all the bes are found in _core._backends
+        try:
+            df.plot(backend=be)
+        except (IndexError, TypeError, ValueError):
+            continue
+    return sorted(list(pd.plotting._core._backends))
+
+
+getAvailableBackends()
 
 
 def main(argv):
@@ -37,32 +59,44 @@ def main(argv):
     plots = []
     for src in args["srcs"]:
         plots.extend(plot(src))
-    showPlots(not args["nonblock"])
+    showPlots(block=not args["nonblock"], plots=plots)
     return 0
 
 
-def showPlots(block=True):
-    be = pd.options.plotting.backend
-    if be == "matplotlib":
-        import matplotlib.pyplot as plt
-
+def showPlots(backend=pd.options.plotting.backend, block=True, plots=[]):
+    if backend == "matplotlib":
         plt.show(block=block)
+    elif backend == "pandas_bokeh":
+        pass
+    elif backend == "dfana":
+        for x in plots:
+            x.show()
+        app = pg.mkQApp()
+        if not block:
+            pg.QtCore.QTimer.singleShot(0, app.quit)
+        app.exec_()
 
 
 def getExampleNames():
     return tuple(sorted(("example_" + x for x in examples.getClassDict().keys())))
 
 
+def getAvailableBackends():
+    return sorted(list(pd.plotting._core._backends))
+
+
 def load(src):
     return x2df.load(src)
 
 
-def plot(df):
+def plot(df, backend=None, show=False, block=False):
     plotbuffer = []
     if isinstance(df, pd.DataFrame):
         dfs = [df]
     else:
         dfs = load(df)
     for df in dfs:
-        plotbuffer.append(df.plot())
+        plotbuffer.append(df.plot(backend=backend))
+    if show:
+        showPlots(block=block, backend=backend, plots=plotbuffer)
     return plotbuffer

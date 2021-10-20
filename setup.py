@@ -29,6 +29,13 @@ dct["packages"] = setuptools.find_packages(where="src")
 dct["install_requires"] = open("requirements.txt", "r").readlines()
 dct["include_package_data"] = True
 
+dct["entry_points"] = {
+    "console_scripts": [],
+    "pandas_plotting_backends": [
+        "dfana = dfana:pyqtgraphbackend",
+    ],
+}
+
 setuptools.setup(**dct)
 shutil.rmtree("build", ignore_errors=True)
 shutil.rmtree(f"src/{dct['name']}.egg-info", ignore_errors=True)
