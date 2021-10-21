@@ -17,6 +17,7 @@ def main():
     init(args)
 
     unsorted = open(dst, "r").readlines()
+    unsorted = [x for x in unsorted if not x.startswith("x2df")]
     unsorted.append("x2df @ git+https://github.com/mb-89/x2df\n")
     sortedlst = sorted(unsorted)
     open(dst, "w").write("".join(sortedlst))

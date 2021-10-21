@@ -1,5 +1,6 @@
 from dfana import dfana
 import itertools
+import sys
 
 
 def test_differentLoadTypes():
@@ -13,6 +14,15 @@ def test_differentLoadTypes():
     dfs = dfana.load(examples[0])
     dfana.plot(dfs[0])
     dfana.showPlots(block=False)
+
+
+def test_loadViaDefaultBE():  # we can use this test as a quick hook for testing
+    plts = dfana.plot("example_all")
+    trace = str(sys.gettrace())
+    debuggerAttached = not trace.startswith("<coverage.")
+    # in debug mode, lets block so we can use this test to quickly check the plots
+    dfana.showPlots(plots=plts, block=debuggerAttached)
+    assert plts
 
 
 def test_AllBackends():

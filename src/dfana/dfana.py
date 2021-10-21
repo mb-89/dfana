@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import pandas_bokeh  # noqa:F401
 import functools
 from dfana import pyqtgraphbackend  # noqa:F401
+import PySide6  # noqa:F401 we need this so its added to the requirements.txt
 import pyqtgraph as pg
 
 
@@ -28,6 +29,7 @@ def getAvailableBackends():
 
 
 getAvailableBackends()
+pd.options.plotting.backend = "dfana"
 
 
 def main(argv):
@@ -74,7 +76,7 @@ def showPlots(backend=pd.options.plotting.backend, block=True, plots=[]):
         app = pg.mkQApp()
         if not block:
             pg.QtCore.QTimer.singleShot(0, app.quit)
-        app.exec_()
+        app.exec()
 
 
 def getExampleNames():

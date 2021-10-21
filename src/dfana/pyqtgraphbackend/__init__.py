@@ -1,6 +1,4 @@
-import numpy as np
-import pyqtgraph as pg
-
+from .lineplt import Plt as LinePlot
 
 from pandas.plotting._matplotlib.boxplot import (  # noqa:F401
     BoxPlot,
@@ -32,14 +30,6 @@ from pandas.plotting._matplotlib.misc import (  # noqa:F401
     radviz,
     scatter_matrix,
 )
-
-
-class LinePlot(pg.GraphicsLayoutWidget):
-    def __init__(self, data, **kwargs):
-        super().__init__()
-        data = np.random.normal(size=1000)
-        p1 = self.addPlot()
-        p1.plot(data, title="Simplest possible plotting example")
 
 
 class BarPlot(LinePlot):
