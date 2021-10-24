@@ -1,6 +1,8 @@
 from dfana import dfana
 import itertools
 import sys
+import pyqtgraph as pg
+from functools import partial
 
 
 def test_differentLoadTypes():
@@ -17,12 +19,32 @@ def test_differentLoadTypes():
 
 
 def test_loadViaDefaultBE():  # we can use this test as a quick hook for testing
-    plts = dfana.plot("example_all")
+    plts = dfana.plot("example_stepresponses1")
     trace = str(sys.gettrace())
     debuggerAttached = not trace.startswith("<coverage.")
     # in debug mode, lets block so we can use this test to quickly check the plots
     dfana.showPlots(plots=plts, block=debuggerAttached)
     assert plts
+
+
+def test_lineplot_pg_interactions():
+    # in this test we open a plot via pyqtgraph and interact with it. when we are done,
+    # we close it
+    ss = pg.QtCore.QTimer.singleShot
+    plts = dfana.plot("example_stepresponses1")
+    app = pg.mkQApp()
+    plt = plts[0].plt
+    lambdas = [
+        partial(plt.cursBtn.clicked.emit, True),
+        partial(plt.cursors[0].setPos, 1000),
+        partial(plt.updateCursorVals, plt.cursors[0]),
+        partial(plts[0].invalidateScene),
+        partial(plt.setVisible, False),
+        app.quit,
+    ]
+    for idx, L in enumerate(lambdas):
+        ss(idx * 50, L)
+    dfana.showPlots(plots=plts)
 
 
 def test_AllBackends():

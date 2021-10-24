@@ -66,6 +66,8 @@ def main(argv):
 
 
 def showPlots(backend=pd.options.plotting.backend, block=True, plots=[]):
+    if not plots:
+        return
     if backend == "matplotlib":
         plt.show(block=block)
     elif backend == "pandas_bokeh":
@@ -74,9 +76,9 @@ def showPlots(backend=pd.options.plotting.backend, block=True, plots=[]):
         for x in plots:
             x.show()
         app = pg.mkQApp()
-        if not block:
-            pg.QtCore.QTimer.singleShot(0, app.quit)
-        app.exec()
+        if plots and not block:
+            pg.QtCore.QTimer.singleShot(100, app.quit)
+        app.exec_()
 
 
 def getExampleNames():
@@ -92,13 +94,23 @@ def load(src):
 
 
 def plot(df, backend=None, show=False, block=False):
-    plotbuffer = []
     if isinstance(df, pd.DataFrame):
         dfs = [df]
     else:
         dfs = load(df)
+
+    plotbuffer = []
+    kwargs = {}
+
+    _collectkwargs(backend, df, kwargs)
+
     for df in dfs:
-        plotbuffer.append(df.plot(backend=backend))
+        plotbuffer.append(df.plot(backend=backend, **kwargs))
     if show:
         showPlots(block=block, backend=backend, plots=plotbuffer)
     return plotbuffer
+
+
+def _collectkwargs(backend, df, kwargs):
+    if backend == "pandas_bokeh":
+        kwargs["sizing_mode"] = "stretch_both"
