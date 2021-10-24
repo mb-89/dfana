@@ -78,7 +78,7 @@ def showPlots(backend=pd.options.plotting.backend, block=True, plots=[]):
         app = pg.mkQApp()
         if plots and not block:
             pg.QtCore.QTimer.singleShot(100, app.quit)
-        app.exec_()
+        app.exec()
 
 
 def getExampleNames():
