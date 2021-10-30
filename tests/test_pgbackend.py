@@ -12,11 +12,11 @@ def test_lineplot_pg_interactions():
     plt = plts[0].plt
     lambdas = [
         # we clicl k the button multiple times to trigger all edge-cases
-        partial(plt.cursBtn.clicked.emit, True),
-        partial(plt.cursBtn.clicked.emit, True),
-        partial(plt.cursBtn.clicked.emit, False),
-        partial(plt.cursBtn.clicked.emit, False),
-        partial(plt.cursBtn.clicked.emit, True),
+        partial(plt.cursBtn.mouseClickEvent, plt.cursBtn),
+        partial(plt.cursBtn.clicked.emit, plt.cursBtn, True),
+        partial(plt.cursBtn.clicked.emit, plt.cursBtn, False),
+        partial(plt.cursBtn.clicked.emit, plt.cursBtn, False),
+        partial(plt.cursBtn.clicked.emit, plt.cursBtn, True),
         partial(plt.cursors[0].setPos, 1000),
         partial(plt.updateCursorVals, plt.cursors[0]),
         partial(plts[0].invalidateScene),

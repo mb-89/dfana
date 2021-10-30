@@ -38,8 +38,9 @@ class PltItemWithCursors(pg.PlotItem):
             v.idx = k
         self.cursBtn.clicked.connect(self.setCursorsVisible)
 
-    def setCursorsVisible(self, vis=None):
-        vis = vis if vis is not None else (not self.c1.isVisible())
+    def setCursorsVisible(self, btn, vis = None):
+        if vis is None:
+            vis = not self.c1.isVisible()
         for k, v in self.cursors.items():
             v.setVisible(vis)
         self.cursorVisChanged.emit(vis)
