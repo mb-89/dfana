@@ -1,17 +1,24 @@
 import pyqtgraph as pg
 import numpy as np
-from functools import cache
+from functools import partial
 from dfana import icons
 
 
 class PltItemWithCursors(pg.PlotItem):
-    cursorPosChanged = pg.QtCore.Signal(dict)
     cursorVisChanged = pg.QtCore.Signal(bool)
 
-    def __init__(self, **kargs):
+    def __init__(self, xname, **kargs):
         super().__init__(**kargs)
-
+        A = 65
+        self.customlegend = LegendWithVals(
+            xname,
+            pen=pg.mkPen(255, 255, 255, A),
+            brush=pg.mkBrush(0, 0, 255, A),
+            offset=(70, 20),
+        )
+        self.customlegend.setParentItem(self)
         self.addCursors()
+        self.cursorVisChanged.connect(self.toggleCursorVis)
 
     def addCursors(self):
         self.cursBtn = pg.ButtonItem(icons.getIcon("cursor"), width=14, parentItem=self)
@@ -29,7 +36,7 @@ class PltItemWithCursors(pg.PlotItem):
         ]
         for k, v in self.cursors.items():
             v.idx = k
-        self.cursBtn.clicked.connect(lambda x: self.setCursorsVisible())
+        self.cursBtn.clicked.connect(self.setCursorsVisible)
 
     def setCursorsVisible(self, vis=None):
         vis = vis if vis is not None else (not self.c1.isVisible())
@@ -45,29 +52,30 @@ class PltItemWithCursors(pg.PlotItem):
         y = self.size().height() - btnRect.height()
         self.cursBtn.setPos(btnRect.width(), y)
 
-    @cache
-    def getValNameList(self):
-        lst = [self.axes["bottom"]["item"].labelText] + [
-            curve.name() for curve in self.curves
-        ]
-        return lst
-
     def updateCursorVals(self, c):
-        if not self.isVisible():
+        if not self.customlegend.expanded:
             return
-        c = c[-1]
+        c = c[0]
         xval = c.pos()[0]
-        try:
-            yvals = tuple(
-                curve.yData[np.searchsorted(curve.xData, xval, side="left")]
-                for curve in self.curves
-            )
-            xy = (xval, *yvals)
-        except IndexError:
-            return
-        dct = dict(zip(self.getValNameList(), xy))
-        dct["#cidx"] = c.idx
-        self.cursorPosChanged.emit(dct)
+        tmp = [xval]
+        for cuidx, cu in enumerate(self.curves):
+            idx = np.searchsorted(cu.xDisp, xval, side="left")
+            yval = cu.yDisp[idx]
+            tmp.append(yval)
+        self.customlegend.setVals(c.idx, tmp)
+
+    def toggleCursorVis(self, vis):
+        if vis:
+            self.customlegend.addCursorCols()
+            for idx, c in enumerate(self.cursors.values()):
+                pg.QtCore.QTimer.singleShot(0, partial(self.updateCursorVals, [c]))
+        else:
+            self.customlegend.remCursorCols()
+
+    def plot(self, *args, **kwargs):
+        p = super().plot(*args, **kwargs)
+        self.customlegend.addItem(p, kwargs["name"])
+        return p
 
 
 class Plt(pg.GraphicsLayoutWidget):
@@ -77,56 +85,124 @@ class Plt(pg.GraphicsLayoutWidget):
             return
         xdata = data.index.values
         xname = data.index.name if data.index.name else "idx"
-        self.plt = PltItemWithCursors()
-        self.tbl = pg.LabelItem()
-        self.tbl.setText("")
-        self.tbl.datadict = {}
-        self.tbl.dataready = False
-        self.tbl.setAttr("justify", "left")
-        plt = self.plt
-        self.addItem(plt)
-        self.addItem(self.tbl, row=1, col=0)
-        self.tbl.setVisible(False)
-        plt.cursorVisChanged.connect(self.toggleTableVis)
-        plt.cursorPosChanged.connect(self.writeTable)
-
-        plt.showGrid(1, 1, int(0.75 * 255))
+        self.plt = PltItemWithCursors(xname)
+        self.addItem(self.plt, row=0, col=0, colspan=4)
+        self.plt.showGrid(1, 1, int(0.75 * 255))
         L = len(data.columns)
-        plt.setLabel("bottom", xname)
-        plt.addLegend()
+        self.plt.setLabel("bottom", xname)
         for idx, yname in enumerate(data.columns):
-            plt.plot(x=xdata, y=data[yname], name=yname, pen=(idx + 1, L))
+            self.plt.plot(x=xdata, y=data[yname], name=yname, pen=(idx + 1, L))
 
-    def toggleTableVis(self, vis):
-        self.tbl.setVisible(vis)
 
-    def writeTable(self, data):
-        cidx = data.pop("#cidx")
-        self.tbl.datadict[cidx] = data
-        if not self.tbl.dataready:
-            self.tbl.dataready = len(self.tbl.datadict) > 1
-            return
-        html = (
-            '<p align = "left"><table><tr><td style="padding-right:10px">'
-            "</td><td>C1</td><td>C2</td><td>Δ</td><td>1/Δ</td></tr>"
-        )
+class LegendWithVals(pg.LegendItem):
+    def __init__(self, xname, *args, **kwargs):
+        kwargs["colCount"] = 1
+        super().__init__(*args, **kwargs)
+        self.layout.addItem(pg.LabelItem("Name"), 0, 1)
+        self.layout.addItem(pg.LabelItem(xname), 1, 1)
+        self.expanded = False
+        self.w0 = None
+        self.w1 = None
+        self.valLen = 8
 
-        for ((k1, v1), (k2, v2)) in zip(
-            self.tbl.datadict[0].items(), self.tbl.datadict[1].items()
+    def setVals(self, cursorIdx, vals):
+        for vidx, v in enumerate(vals):
+            targetItem = self.layout.itemAt(vidx + 1, cursorIdx + 2)
+            targetItem._val = v
+
+            targetItem.setText(self.getFixedLenString(v, self.valLen))
+        if (
+            self.layout.itemAt(1, 2)._val is not None
+            and self.layout.itemAt(1, 3)._val is not None
         ):
-            delta = v2 - v1
-            deltainv = 1.0 / delta if delta != 0.0 else 0.0
-            html += "<tr>"
-            html += f'<td style="padding-right:10px">{k1}</td>'
-            html += f'<td style="padding-right:10px">{v1:.2f}</td>'
-            html += f'<td style="padding-right:10px">{v2:.2f}</td>'
-            html += f'<td style="padding-right:10px">{delta:.2f}</td>'
-            html += f'<td style="padding-right:10px">{deltainv:.2f}</td>'
-            html += "</tr>"
+            self.calcDerivativeVals()
 
-        html += "</table></p>"
+    def getFixedLenString(self, flt, L):
 
-        self.tbl.setText(html)
+        s = np.format_float_scientific(flt, precision=L - 5, trim="-")
+        return s
+
+    def calcDerivativeVals(self):
+        for row in range(1, self.layout.rowCount()):
+            v0 = self.layout.itemAt(row, 2)._val
+            v1 = self.layout.itemAt(row, 3)._val
+            delta = v1 - v0
+            deltainv = 0 if delta == 0 else 1 / delta
+            t = self.layout.itemAt(row, 4)
+            t._val = delta
+            t.setText(self.getFixedLenString(delta, self.valLen))
+            t = self.layout.itemAt(row, 5)
+            t._val = deltainv
+            t.setText(self.getFixedLenString(deltainv, self.valLen))
+
+    def addCursorCols(self):
+        if self.expanded:
+            return
+        self.expanded = True
+        if self.w0 is None:
+            self.w0 = self.layout.geometry().width()
+
+        self.layout.addItem(pg.LabelItem("C1"), 0, 2)
+        self.layout.addItem(pg.LabelItem("C2"), 0, 3)
+        self.layout.addItem(pg.LabelItem("Δ"), 0, 4)
+        self.layout.addItem(pg.LabelItem("1/Δ"), 0, 5)
+
+        for col in range(2, 6):
+            self.layout.setColumnMaximumWidth(col, self.valLen * 7)
+            self.layout.setColumnMinimumWidth(col, self.valLen * 7)
+
+        if self.w1 is not None:
+            self.setMaximumWidth(self.w1)
+
+        for row in range(1, self.layout.rowCount()):
+            for col in range(2, 6):
+                item = pg.LabelItem("")
+                item._val = None
+                self.layout.addItem(item, row, col)
+
+    def remCursorCols(self):
+        if not self.expanded:
+            return
+        self.expanded = False
+        if self.w1 is None:
+            self.w1 = self.layout.geometry().width()
+
+        self.layout.removeItem(self.layout.itemAt(0, 2))
+        self.layout.removeItem(self.layout.itemAt(0, 3))
+        self.layout.removeItem(self.layout.itemAt(0, 4))
+        self.layout.removeItem(self.layout.itemAt(0, 5))
+
+        for row in range(1, self.layout.rowCount()):
+            for col in range(2, 6):
+                self.layout.removeItem(self.layout.itemAt(row, col))
+
+        if self.w0 is not None:
+            self.setMaximumWidth(self.w0)
+
+    def _addItemToLayout(self, sample, label):
+        col = self.layout.columnCount()
+        row = self.layout.rowCount()
+        # in the original code, the next two lines are not commented out
+        # if row:
+        #    row -= 1
+        # we need this bc we injected more rows and cols than in the original code
+        if row == 2:
+            col = 0
+        else:
+            col = 2
+
+        nCol = self.columnCount * 2
+
+        for col in range(0, nCol, 2):
+            # FIND RIGHT COLUMN
+            # if i dont add the row>=...,  get QGraphicsGridLayout::itemAt errors
+            if row >= self.layout.rowCount() or not self.layout.itemAt(row, col):
+                break
+
+        self.layout.addItem(sample, row, col)
+        self.layout.addItem(label, row, col + 1)
+        # Keep rowCount in sync with the number of rows if items are added
+        self.rowCount = max(self.rowCount, row + 1)
 
 
 class RelPosCursor(pg.InfiniteLine):
