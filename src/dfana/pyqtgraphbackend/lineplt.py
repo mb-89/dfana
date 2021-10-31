@@ -3,13 +3,25 @@ import numpy as np
 from functools import partial
 from dfana import icons
 
+import warnings
+
+warnings.filterwarnings("error")
+
+numValLen = 8
+
 
 class PltItemWithCursors(pg.PlotItem):
     cursorVisChanged = pg.QtCore.Signal(bool)
+    showSubPlot = pg.QtCore.Signal(tuple)
+    hideSubPlot = pg.QtCore.Signal()
+    roiChangedSig = pg.QtCore.Signal(tuple)
 
-    def __init__(self, xname, **kargs):
+    def __init__(self, xname, hasPlugins=True, **kargs):
         super().__init__(**kargs)
+        self.initialized = False
+        self.isSubPlot = not hasPlugins
         A = 65
+        self.showGrid(1, 1, int(0.75 * 255))
         self.customlegend = LegendWithVals(
             xname,
             pen=pg.mkPen(255, 255, 255, A),
@@ -17,11 +29,21 @@ class PltItemWithCursors(pg.PlotItem):
             offset=(70, 20),
         )
         self.customlegend.setParentItem(self)
-        self.addCursors()
-        self.cursorVisChanged.connect(self.toggleCursorVis)
+        self.addCursors(hasPlugins)
 
-    def addCursors(self):
-        self.cursBtn = pg.ButtonItem(icons.getIcon("cursor"), width=14, parentItem=self)
+        self.subplotData = {}
+        self.setTitle("")
+        if hasPlugins:
+            self.addROI()
+            self.addZoomPlot()
+        self.initialized = True
+
+    def addCursors(self, hasPlugins):
+        if hasPlugins:
+            # if we have no plugins, the cursor btn is part of a different plot widget
+            self.cursBtn = pg.ButtonItem(
+                icons.getIcon("cursor"), width=14, parentItem=self
+            )
 
         self.c1 = RelPosCursor(1 / 3, label="C1")
         self.c2 = RelPosCursor(2 / 3, label="C2")
@@ -36,7 +58,9 @@ class PltItemWithCursors(pg.PlotItem):
         ]
         for k, v in self.cursors.items():
             v.idx = k
-        self.cursBtn.clicked.connect(self.setCursorsVisible)
+        if hasPlugins:
+            self.cursBtn.clicked.connect(self.setCursorsVisible)
+        self.cursorVisChanged.connect(self.toggleCursorVis)
 
     def setCursorsVisible(self, btn, vis=None):
         if vis is None:
@@ -47,11 +71,17 @@ class PltItemWithCursors(pg.PlotItem):
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
-        if self.autoBtn is None:  # pragma: no cover # already closed down
+        if not self.initialized:  # pragma: no cover #this can only happen in debugger
+            return
+        if (
+            self.autoBtn is None or self.isSubPlot
+        ):  # pragma: no cover # already closed down
             return
         btnRect = self.mapRectFromItem(self.autoBtn, self.autoBtn.boundingRect())
-        y = self.size().height() - btnRect.height()
+        # y = self.size().height() - btnRect.height()
+        y = -20
         self.cursBtn.setPos(btnRect.width(), y)
+        self.zoomBtn.setPos(btnRect.width() * 2, y)
 
     def updateCursorVals(self, c):
         if not self.customlegend.expanded:
@@ -60,7 +90,10 @@ class PltItemWithCursors(pg.PlotItem):
         xval = c.pos()[0]
         tmp = [xval]
         for cuidx, cu in enumerate(self.curves):
-            idx = np.searchsorted(cu.xDisp, xval, side="left")
+            try:
+                idx = np.searchsorted(cu.xDisp, xval, side="left")
+            except (ValueError, IndexError):
+                return
             yval = cu.yDisp[idx]
             tmp.append(yval)
         self.customlegend.setVals(c.idx, tmp)
@@ -78,6 +111,51 @@ class PltItemWithCursors(pg.PlotItem):
         self.customlegend.addItem(p, kwargs["name"])
         return p
 
+    def addROI(self):
+        self.roi = RelPosLinearRegion(self, self.roiChanged)
+        self.roi.setRelRegion((0.4, 0.6))
+        self.roi.setVisible(False)
+
+    def addZoomPlot(self):
+        self.zoomBtn = pg.ButtonItem(icons.getIcon("zoom"), width=14, parentItem=self)
+        self.zoomBtn.clicked.connect(self.setZoomVisible)
+
+    def setZoomVisible(self, btn):
+        vis = not self.roi.isVisible()
+        self.roi.setVisible(vis)
+
+        if vis:
+            self.showSubPlot.emit(("zoom", self))
+        else:
+            self.hideSubPlot.emit()
+
+    def fillSubPlot(self, args):
+        type, datasrc = args
+        self.subplotData["type"] = type
+        self.subplotData["datasrc"] = datasrc
+        self.createSubPlot()
+
+    def createSubPlot(self):
+        if self.subplotData["type"] == "zoom":
+            self.subplotData["handler"] = ZoomPlotHandler(self.subplotData, self)
+
+        self.subplotData["handler"].initialize()
+        self.setVisible(True)
+        self.roiChanged(self.subplotData["datasrc"].roi.getRegion())
+        self.subplotData["datasrc"].cursBtn.clicked.connect(self.setCursorsVisible)
+        if self.subplotData["datasrc"].customlegend.expanded:
+            self.setCursorsVisible(None, True)
+
+    def roiChanged(self, reg):
+        if not self.isSubPlot:
+            self.roiChangedSig.emit(reg.getRegion())
+            return
+        if not self.isVisible():
+            return
+        hdl = self.subplotData.get("handler")
+        if hdl:
+            hdl.updateData(reg)
+
 
 class Plt(pg.GraphicsLayoutWidget):
     def __init__(self, data, **kwargs):
@@ -87,12 +165,31 @@ class Plt(pg.GraphicsLayoutWidget):
         xdata = data.index.values
         xname = data.index.name if data.index.name else "idx"
         self.plt = PltItemWithCursors(xname)
-        self.addItem(self.plt, row=0, col=0, colspan=4)
-        self.plt.showGrid(1, 1, int(0.75 * 255))
+        self.spacer = pg.LabelItem("")
+        self.subPlt = None
+
+        self.addItem(self.spacer, row=0, col=0)
+        self.addItem(self.plt, row=1, col=0)
+        self.plt.showSubPlot.connect(self.createSubPlot)
+        self.plt.hideSubPlot.connect(self.destroySubPlot)
+
         L = len(data.columns)
         self.plt.setLabel("bottom", xname)
         for idx, yname in enumerate(data.columns):
             self.plt.plot(x=xdata, y=data[yname], name=yname, pen=(idx + 1, L))
+
+    def createSubPlot(self, args):
+        self.subPlt = PltItemWithCursors("", hasPlugins=False)
+        self.plt.roiChangedSig.connect(self.subPlt.roiChanged)
+        self.subPlt.setVisible(False)
+        self.addItem(self.subPlt, row=2, col=0)
+        self.ci.layout.setRowStretchFactor(2, 2)
+        pg.QtCore.QTimer.singleShot(0, partial(self.subPlt.fillSubPlot, args))
+
+    def destroySubPlot(self):
+        self.subPlt.setVisible(False)
+        self.subPlt.deleteLater()
+        self.subPlt = None
 
 
 class LegendWithVals(pg.LegendItem):
@@ -100,28 +197,23 @@ class LegendWithVals(pg.LegendItem):
         kwargs["colCount"] = 1
         super().__init__(*args, **kwargs)
         self.layout.addItem(pg.LabelItem("Name"), 0, 1)
+        self.layout.addItem(pg.LabelItem(" X"), 1, 0)
         self.layout.addItem(pg.LabelItem(xname), 1, 1)
         self.expanded = False
         self.w0 = None
         self.w1 = None
-        self.valLen = 8
 
     def setVals(self, cursorIdx, vals):
         for vidx, v in enumerate(vals):
             targetItem = self.layout.itemAt(vidx + 1, cursorIdx + 2)
             targetItem._val = v
 
-            targetItem.setText(self.getFixedLenString(v, self.valLen))
+            targetItem.setText(getFixedLenString(v, numValLen))
         if (
             self.layout.itemAt(1, 2)._val is not None
             and self.layout.itemAt(1, 3)._val is not None
         ):
             self.calcDerivativeVals()
-
-    def getFixedLenString(self, flt, L):
-
-        s = np.format_float_scientific(flt, precision=L - 5, trim="-")
-        return s
 
     def calcDerivativeVals(self):
         for row in range(1, self.layout.rowCount()):
@@ -131,10 +223,10 @@ class LegendWithVals(pg.LegendItem):
             deltainv = 0 if delta == 0 else 1 / delta
             t = self.layout.itemAt(row, 4)
             t._val = delta
-            t.setText(self.getFixedLenString(delta, self.valLen))
+            t.setText(getFixedLenString(delta, numValLen))
             t = self.layout.itemAt(row, 5)
             t._val = deltainv
-            t.setText(self.getFixedLenString(deltainv, self.valLen))
+            t.setText(getFixedLenString(deltainv, numValLen))
 
     def addCursorCols(self):
         if self.expanded:
@@ -149,8 +241,8 @@ class LegendWithVals(pg.LegendItem):
         self.layout.addItem(pg.LabelItem("1/Δ"), 0, 5)
 
         for col in range(2, 6):
-            self.layout.setColumnMaximumWidth(col, self.valLen * 7)
-            self.layout.setColumnMinimumWidth(col, self.valLen * 7)
+            self.layout.setColumnMaximumWidth(col, numValLen * 7)
+            self.layout.setColumnMinimumWidth(col, numValLen * 7)
 
         if self.w1 is not None:
             self.setMaximumWidth(self.w1)
@@ -245,3 +337,84 @@ class RelPosCursor(pg.InfiniteLine):
     def viewTransformChanged(self):
         self.setRelPos()
         return super().viewTransformChanged()
+
+
+class RelPosLinearRegion(pg.LinearRegionItem):
+    def __init__(self, parent, updatefun):
+        super().__init__()
+        self.currRelRegion = [0.25, 0.75]
+        self.updatefun = updatefun
+        self.plt = parent
+        self.setVisible(False)
+        parent.addItem(self)
+        self.sigRegionChanged.connect(updatefun)
+        self.sigRegionChanged.connect(self.updateRelRegion)
+
+    def setVisible(self, vis):
+        if vis and not self.isVisible():
+            ((x0, x1), (y0, y1)) = self.plt.viewRange()
+            self.setRelRegion([0.25, 0.75])
+        super().setVisible(vis)
+
+    def updateRelRegion(self, _):
+        reg = self.getRegion()
+        x0, x1 = self.getViewBox().viewRange()[0]
+        dx = x1 - x0
+        self.currRelRegion = [(reg[0] - x0) / dx, (reg[1] - x0) / dx]
+
+    def setRelRegion(self, relRegion=None):
+        if relRegion is None:
+            relRegion = self.currRelRegion
+        x0, x1 = self.plt.viewRange()[0]
+        dx = x1 - x0
+        self.setRegion([x0 + dx * relRegion[0], x0 + dx * relRegion[1]])
+
+    def setRegion(self, reg):
+        x0, x1 = self.getViewBox().viewRange()[0]
+        dx = x1 - x0
+        self.currRelRegion = [(reg[0] - x0) / dx, (reg[1] - x0) / dx]
+        super().setRegion(reg)
+
+    def viewTransformChanged(self):
+        self.setRelRegion()
+        fn = partial(self.updatefun, self)
+        pg.QtCore.QTimer.singleShot(0, fn)
+        return super().viewTransformChanged()
+
+
+class ZoomPlotHandler:
+    def __init__(self, data, dst):
+        self.data = data
+        self.dst = dst
+
+    def initialize(self):
+        plt = self.dst
+        src = self.data["datasrc"]
+        xname = src.axes["bottom"]["item"].label.toPlainText()
+        plt.setLabel("bottom", xname)
+        plt.setTitle("Zoom")
+        plt.customlegend.layout.itemAt(1, 1).setText(xname)
+        srccurves = src.curves
+        L = len(srccurves)
+        for idx, cu in enumerate(srccurves):
+            plt.plot(x=[0], y=[0], name=cu.name(), pen=(idx + 1, L))
+
+    def updateData(self, reg):
+        x0, x1 = reg
+        plt = self.dst
+        src = self.data["datasrc"]
+        xname = src.axes["bottom"]["item"].label.toPlainText()
+        s0 = getFixedLenString(x0, numValLen)
+        s1 = getFixedLenString(x1, numValLen)
+        plt.setTitle(f"Zoom on {xname}: {s0} -- {s1}")
+        for idx, curve in enumerate(src.curves):
+            x = curve.xData
+            y = curve.yData
+            mask = np.logical_and(x >= x0, x <= x1)
+            plt.curves[idx].setData(x=x[mask], y=y[mask])
+
+
+def getFixedLenString(flt, L):
+
+    s = np.format_float_scientific(flt, precision=L - 5, trim="-")
+    return s
