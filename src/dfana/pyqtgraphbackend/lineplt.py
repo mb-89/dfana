@@ -2,12 +2,16 @@ import pyqtgraph as pg
 import numpy as np
 from functools import partial
 from dfana import icons
+from dfana.pyqtgraphbackend import zoomplt
+from dfana.pyqtgraphbackend import fftplt
+from dfana.sharedfuns import getFixedLenString, numValLen
 
 import warnings
 
 warnings.filterwarnings("error")
 
-numValLen = 8
+
+plugins = [zoomplt, fftplt]
 
 
 class PltItemWithCursors(pg.PlotItem):
@@ -32,10 +36,11 @@ class PltItemWithCursors(pg.PlotItem):
         self.addCursors(hasPlugins)
 
         self.subplotData = {}
+        self.openPlugin = None
         self.setTitle("")
         if hasPlugins:
             self.addROI()
-            self.addZoomPlot()
+            self.addPlugins()
         self.initialized = True
 
     def addCursors(self, hasPlugins):
@@ -81,20 +86,27 @@ class PltItemWithCursors(pg.PlotItem):
         # y = self.size().height() - btnRect.height()
         y = -20
         self.cursBtn.setPos(btnRect.width(), y)
-        self.zoomBtn.setPos(btnRect.width() * 2, y)
+        for idx, b in enumerate(self.btns.values()):
+            b.setPos(btnRect.width() * (2 + idx), y)
 
     def updateCursorVals(self, c):
         if not self.customlegend.expanded:
             return
         c = c[0]
-        xval = c.pos()[0]
+        try:
+            xval = c.pos()[0]
+        except RuntimeError:  # pragma: no cover # can happen during debugging
+            return
         tmp = [xval]
         for cuidx, cu in enumerate(self.curves):
             try:
                 idx = np.searchsorted(cu.xDisp, xval, side="left")
             except (ValueError, IndexError):
                 return
-            yval = cu.yDisp[idx]
+            try:
+                yval = cu.yDisp[idx]
+            except IndexError:
+                return
             tmp.append(yval)
         self.customlegend.setVals(c.idx, tmp)
 
@@ -116,18 +128,28 @@ class PltItemWithCursors(pg.PlotItem):
         self.roi.setRelRegion((0.4, 0.6))
         self.roi.setVisible(False)
 
-    def addZoomPlot(self):
-        self.zoomBtn = pg.ButtonItem(icons.getIcon("zoom"), width=14, parentItem=self)
-        self.zoomBtn.clicked.connect(self.setZoomVisible)
+    def addPlugins(self):
+        self.btns = {}
+        for plugin in plugins:
+            b = pg.ButtonItem(icons.getIcon(plugin.iconName), width=14, parentItem=self)
+            b.clicked.connect(partial(self.setPluginVisible, plugin.name))
+            self.btns[plugin.name] = b
 
-    def setZoomVisible(self, btn):
-        vis = not self.roi.isVisible()
-        self.roi.setVisible(vis)
-
-        if vis:
-            self.showSubPlot.emit(("zoom", self))
-        else:
+    def setPluginVisible(self, pluginName):
+        if self.openPlugin == pluginName:
+            self.roi.setVisible(False)
             self.hideSubPlot.emit()
+            self.openPlugin = None
+            return
+
+        if self.openPlugin:
+            self.hideSubPlot.emit()
+        else:
+            self.roi.setVisible(True)
+        pg.QtCore.QTimer.singleShot(
+            0, partial(self.showSubPlot.emit, (pluginName, self))
+        )
+        self.openPlugin = pluginName
 
     def fillSubPlot(self, args):
         type, datasrc = args
@@ -136,8 +158,10 @@ class PltItemWithCursors(pg.PlotItem):
         self.createSubPlot()
 
     def createSubPlot(self):
-        if self.subplotData["type"] == "zoom":
-            self.subplotData["handler"] = ZoomPlotHandler(self.subplotData, self)
+        for plugin in plugins:
+            if self.subplotData["type"] == plugin.name:
+                self.subplotData["handler"] = plugin.PltHandler(self.subplotData, self)
+                break
 
         self.subplotData["handler"].initialize()
         self.setVisible(True)
@@ -187,6 +211,8 @@ class Plt(pg.GraphicsLayoutWidget):
         pg.QtCore.QTimer.singleShot(0, partial(self.subPlt.fillSubPlot, args))
 
     def destroySubPlot(self):
+        if not self.subPlt:  # pragma: no cover #this can only happen in debugger
+            return
         self.subPlt.setVisible(False)
         self.subPlt.deleteLater()
         self.subPlt = None
@@ -208,7 +234,7 @@ class LegendWithVals(pg.LegendItem):
             targetItem = self.layout.itemAt(vidx + 1, cursorIdx + 2)
             targetItem._val = v
 
-            targetItem.setText(getFixedLenString(v, numValLen))
+            targetItem.setText(getFixedLenString(v))
         if (
             self.layout.itemAt(1, 2)._val is not None
             and self.layout.itemAt(1, 3)._val is not None
@@ -223,10 +249,10 @@ class LegendWithVals(pg.LegendItem):
             deltainv = 0 if delta == 0 else 1 / delta
             t = self.layout.itemAt(row, 4)
             t._val = delta
-            t.setText(getFixedLenString(delta, numValLen))
+            t.setText(getFixedLenString(delta))
             t = self.layout.itemAt(row, 5)
             t._val = deltainv
-            t.setText(getFixedLenString(deltainv, numValLen))
+            t.setText(getFixedLenString(deltainv))
 
     def addCursorCols(self):
         if self.expanded:
@@ -380,41 +406,3 @@ class RelPosLinearRegion(pg.LinearRegionItem):
         fn = partial(self.updatefun, self)
         pg.QtCore.QTimer.singleShot(0, fn)
         return super().viewTransformChanged()
-
-
-class ZoomPlotHandler:
-    def __init__(self, data, dst):
-        self.data = data
-        self.dst = dst
-
-    def initialize(self):
-        plt = self.dst
-        src = self.data["datasrc"]
-        xname = src.axes["bottom"]["item"].label.toPlainText()
-        plt.setLabel("bottom", xname)
-        plt.setTitle("Zoom")
-        plt.customlegend.layout.itemAt(1, 1).setText(xname)
-        srccurves = src.curves
-        L = len(srccurves)
-        for idx, cu in enumerate(srccurves):
-            plt.plot(x=[0], y=[0], name=cu.name(), pen=(idx + 1, L))
-
-    def updateData(self, reg):
-        x0, x1 = reg
-        plt = self.dst
-        src = self.data["datasrc"]
-        xname = src.axes["bottom"]["item"].label.toPlainText()
-        s0 = getFixedLenString(x0, numValLen)
-        s1 = getFixedLenString(x1, numValLen)
-        plt.setTitle(f"Zoom on {xname}: {s0} -- {s1}")
-        for idx, curve in enumerate(src.curves):
-            x = curve.xData
-            y = curve.yData
-            mask = np.logical_and(x >= x0, x <= x1)
-            plt.curves[idx].setData(x=x[mask], y=y[mask])
-
-
-def getFixedLenString(flt, L):
-
-    s = np.format_float_scientific(flt, precision=L - 5, trim="-")
-    return s

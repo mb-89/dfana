@@ -5,4 +5,5 @@ pandas==1.2.4
 pandas_bokeh==0.5.5
 pipreqs==0.4.10
 pyqtgraph==0.12.1
+scipy==1.5.4
 x2df @ git+https://github.com/mb-89/x2df
