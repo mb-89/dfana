@@ -1,0 +1,3 @@
+include requirements.txt
+include pyproject.toml
+include src/dfana/icons/*.png

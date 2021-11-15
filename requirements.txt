@@ -1,9 +1,8 @@
-demjson==2.2.4
-scipy==1.5.4
-py7zr==0.16.1
-qt_material==2.8.6
+PySide6==6.2.1
+matplotlib==3.4.1
 numpy==1.19.3
 pandas==1.2.4
-lxml==4.6.1
+pandas_bokeh==0.5.5
+pipreqs==0.4.10
 pyqtgraph==0.12.1
-PySide6==6.1.1
+x2df @ git+https://github.com/mb-89/x2df
