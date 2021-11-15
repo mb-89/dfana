@@ -10,6 +10,7 @@ import logging
 import dffuns
 import dsfuns
 import pltfuns
+import exportfuns
 import sharedWidgets
 import gc
 from defines import *
@@ -17,6 +18,7 @@ import os
 import os.path as op
 
 log = logging.getLogger()
+ONEDFPERPLOT = False
 
 def changeStyle():
     app = pg.mkQApp()
@@ -44,6 +46,7 @@ class DockArea(da.DockArea):
         
         d1.list.updated.connect(d2.list.updateMdl)
         d3.pltsig.connect(self.addPlot)
+        d3.exportsig.connect(self.exportPlot)
 
     def addPlot(self):
         app = pg.mkQApp()
@@ -52,10 +55,35 @@ class DockArea(da.DockArea):
         dfs = tuple(dfs.keys())
         dss = self.docks["DataSeries"].sel.getSelectedIdxs()
 
-        #for now, we plot one plot per df. may change later
-        for df in dfs:
-            singledf = tuple([df])
-            plt = pltfuns.PltDock(self.nrOfPlots,singledf,dss,app.data)
+        if ONEDFPERPLOT:
+            for df in dfs:
+                singledf = tuple([df])
+                plt = pltfuns.PltDock(self.nrOfPlots,singledf,dss,app.data)
+                plt.label.closeButton.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+                plt.label.closeButton.setText("X")
+                plt.setStretch(x=DEFAULT_W,y=DEFAULT_H/5*4)
+                self.nrOfPlots+=1
+                existingPlots = sorted([k for k in self.docks.keys() if k.startswith("Plot #")])
+                noTargetFound = False
+                offset = 0
+                while True:
+                    offset+=1
+                    try:
+                        target =self.docks[existingPlots[-offset]]
+                        if target.area != self: continue #we dont dock onto floating plots
+                        self.addDock(plt, "above",target , size=(DEFAULT_W,DEFAULT_H/5*4))
+                        break
+                    except TypeError:
+                        continue
+                    except (KeyError, IndexError) as e:
+                        noTargetFound=True
+                        break
+                if noTargetFound: self.addDock(plt, "bottom", size=(DEFAULT_W,DEFAULT_H/5*4))
+
+                cl = partial(self.cleanup, plt._name)
+            plt.sigClosed.connect(cl)
+        else:
+            plt = pltfuns.PltDock(self.nrOfPlots,dfs,dss,app.data)
             plt.label.closeButton.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
             plt.label.closeButton.setText("X")
             plt.setStretch(x=DEFAULT_W,y=DEFAULT_H/5*4)
@@ -80,6 +108,13 @@ class DockArea(da.DockArea):
             cl = partial(self.cleanup, plt._name)
             plt.sigClosed.connect(cl)
 
+    def exportPlot(self):
+        plts = tuple((k,v) for k,v in self.docks.items() if k.startswith("Plot #"))
+        if not plts:return
+        for plt in plts:
+            if not plt[1].visibleRegion().isEmpty():
+                exportfuns.export(plt[0],plt[1])
+
     def cleanup(self, dockname, extraArg):
         dck = self.docks.pop(dockname)
         dck.deleteLater()
@@ -88,6 +123,7 @@ class DockArea(da.DockArea):
 
 class ActionsDock(da.Dock):
     pltsig = QtCore.Signal()
+    exportsig = QtCore.Signal()
     def __init__(self):
         super().__init__("Actions", size=(DEFAULT_W/3,DEFAULT_H/5))
         self.setStretch(x=DEFAULT_W/5,y=DEFAULT_H/5)
@@ -104,16 +140,19 @@ class ActionsDock(da.Dock):
         self.meta = QtWidgets.QPushButton("meta")
         self.dataOverview = QtWidgets.QPushButton("data overview")
         self.srcbut = QtWidgets.QPushButton("open dfana src")
+        self.xbut = QtWidgets.QPushButton("Export")
 
         l.addWidget(self.srcbut)
         l.addWidget(self.dataOverview)
         l.addWidget(self.meta)
+        l.addWidget(self.xbut)
         l.addWidget(self.plt)
 
         self.srcbut.clicked.connect(lambda: os.startfile(op.dirname(__file__)))
         self.meta.clicked.connect(self.showMetaData)
         self.dataOverview.clicked.connect(self.showDataOverview)
         self.plt.clicked.connect(self.pltsig.emit)
+        self.xbut.clicked.connect(self.exportsig.emit)
         self.metaView = None
 
     def showMetaData(self):

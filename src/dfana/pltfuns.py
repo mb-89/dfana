@@ -41,13 +41,10 @@ class PltDock(da.Dock):
         else: x = None
         for subplot in Y:
             traces = tuple(self.rawdata["dss"][y] for y in subplot)
-            for df in dfs:
-                #collect x data
-                try: xdata = {x: df[x]}
-                except: xdata = {"idx":df.index.values}
-                #collect y data
-                ydata = {}
-                for idx,trc in enumerate(traces):
+            xdata = self.getSyncXdata(dfs,x)
+            ydata = {}
+            for idx,trc in enumerate(traces):
+                for df in dfs:
                     try:
                         yd = df[trc].values
                         name = f"[Y{idx}] {trc} [{df.attrs['_idx']}]"
@@ -55,6 +52,17 @@ class PltDock(da.Dock):
                     except:continue
             subplts.append((xdata,ydata))
         return subplts
+
+    def getSyncXdata(self, dfs,xname):
+        x = None
+        for df in dfs:
+            if xname in df:
+                x = {xname:df[xname]}
+                break
+        if not x:
+            idx = dfs[0].index
+            x = {idx.name:idx.values}
+        return x
 
     def createDataOverview(self):
         dct = {}
