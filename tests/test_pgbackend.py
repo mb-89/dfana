@@ -2,7 +2,7 @@ import pyqtgraph as pg
 from dfana import dfana
 from functools import partial
 
-QtDeltaTimeMS = 50
+QtDeltaTimeMS = 100
 
 
 def test_lineplot_pg_interactions():
