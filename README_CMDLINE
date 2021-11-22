@@ -10,3 +10,8 @@ optional arguments:
   --nonblock     set to true to open figures in nonblocking mode for debugging
                  or batch exports.
   -v, --version  prints version
+
+Built-In examples:
+py -m dfana example_spectral1
+py -m dfana example_stepresponses1
+py -m dfana example_all

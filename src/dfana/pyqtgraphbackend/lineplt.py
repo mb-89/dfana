@@ -4,6 +4,7 @@ from functools import partial
 from dfana import icons
 from dfana.pyqtgraphbackend import zoomplt
 from dfana.pyqtgraphbackend import fftplt
+from dfana.pyqtgraphbackend import specplt
 from dfana.sharedfuns import getFixedLenString, numValLen
 
 import warnings
@@ -11,7 +12,7 @@ import warnings
 warnings.filterwarnings("error")
 
 
-plugins = [zoomplt, fftplt]
+plugins = [zoomplt, fftplt, specplt]
 
 
 class PltItemWithCursors(pg.PlotItem):

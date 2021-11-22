@@ -122,3 +122,22 @@ def test_lineplot_pg_switchPlugins():
         ss(idx * QtDeltaTimeMS, L)
     dfana.showPlots(plots=plts)
     assert not any(failureContainer)
+
+
+def test_lineplot_pg_spec():
+    ss = pg.QtCore.QTimer.singleShot
+    plts = dfana.plot("example_spectral1")
+    # app = pg.mkQApp()
+    plt = plts[0].plt
+
+    failureContainer = []
+    btn = plt.btns["spec"]
+
+    lambdas = [
+        partial(btn.mouseClickEvent, btn),  # display the spec plot
+        # app.quit,
+    ]
+    for idx, L in enumerate(lambdas):
+        ss(idx * QtDeltaTimeMS, L)
+    dfana.showPlots(plots=plts)
+    assert not any(failureContainer)

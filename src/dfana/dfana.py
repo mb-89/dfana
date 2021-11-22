@@ -33,9 +33,15 @@ pd.options.plotting.backend = "dfana"
 
 
 def main(argv):
+    epilog = ["Built-In examples:"]
+    epilog.extend(f"py -m dfana {x}" for x in getExampleNames())
+    epilog.append("py -m dfana example_all")
+
     parser = argparse.ArgumentParser(
         "parses given glob-style paths and extracts dataframes."
-        + " Plots all the given dataframes"
+        + " Plots all the given dataframes",
+        epilog="\n".join(epilog),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("srcs", nargs="*", help="glob-style paths that will be parsed")
     parser.add_argument(
@@ -61,6 +67,9 @@ def main(argv):
     plots = []
     for src in args["srcs"]:
         plots.extend(plot(src))
+    if not plots:
+        parser.print_help()
+        return 0
     showPlots(block=not args["nonblock"], plots=plots)
     return 0
 
