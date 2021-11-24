@@ -212,7 +212,7 @@ class CsvParserGUI(QtWidgets.QDialog):
             entry = self.params.cellWidget(idx,0).text()
             param = sig.parameters[keys[idx]]
             if entry != "":
-                if (param.annotation != inspect._empty) and isinstance(entry,param.annotation.__args__):dct[param.name] = entry
+                if (param.annotation != inspect._empty) and isinstance(entry,str):dct[param.name] = entry
                 else:
                     try: dct[param.name] = eval(entry)
                     except:pass
@@ -220,7 +220,7 @@ class CsvParserGUI(QtWidgets.QDialog):
         self.result = dict((k,v) for k,v in dct.items())
         fp = dct.pop('filepath_or_buffer')
         try: df = pandas.read_csv(fp, **dct)
-        except:
+        except Exception as e:
             log.error(f"error during parsing: {str(e)}")
             return
         if df.columns.nlevels >1:
